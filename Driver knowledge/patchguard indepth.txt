@@ -1,0 +1,448 @@
+Arrow Demystifying PatchGuard: An In-Depth Analysis Through Practical Engineering
+Demystifying PatchGuard: An In-Depth Analysis Through Practical Engineering
+
+Are you interested in understanding how PatchGuard, a kernel protection feature of Windows, works? Do you want to dive deep into its inner workings? If so, you've come to the right place!
+In this post, I will be sharing my research on PatchGuard which I have collected from several resources, an important feature that protects the Windows kernel from modification. I have compiled my findings into a comprehensive guide that explains PatchGuard's structure, security mechanisms, and how it could be bypassed. To provide a more practical understanding, I have also included decompiled functions relevant to PatchGuard on my Github repository, which can be found here: GitHub. So whether you're a security enthusiast or a system developer, join me as we demystify PatchGuard and gain a deeper understanding of this important Windows kernel feature.
+
+
+Disclaimer
+I do not claim that I single-handedly did all that is mentioned in this post, I simply collected information from various sources and also practically went through the process, to collect screenshots, decompiled functions, and several other new updated information and compiled it into a comprehensive post, to help people in this forum understand PatchGuard better, as information about this topic is highly scarce.
+
+Credits
+The work done on understanding PatchGuard would not have been possible without the contributions of several individuals. Adam Orion, Dongjiang, Andrea Allievi, 0xcpu, Skywing, Skape, Satoshi Tanda, eShard for Tetrane's papers, and more, who have all made significant contributions to the field. Their research, analysis, and findings have helped to shed light on the inner workings of PatchGuard and have paved the way for further exploration and understanding of this critical security feature in the Windows operating system. Without their efforts, the security community would have a limited understanding of the challenges and opportunities that PatchGuard presents. Their work serves as a testament to the power of collaboration and community in advancing the field of cybersecurity.
+
+What is PatchGuard?
+The presence of PatchGuard in the 64-bit Windows operating system is a remarkable security measure that thwarts the efforts of kernel-level rootkits and other malware to manipulate critical system code and structures. Its method of operation is through regular monitoring of the kernel to identify any illicit modifications and counteracting them without delay. The purpose of PatchGuard is to preserve the integrity of the operating system and guarantee that it operates at an optimal level, consequently heightening the general security and steadiness of the system. Kernel code and data structures are verified and digital signatures enforced by PatchGuard, a measure designed to avert instability or security threats brought about by inconsistent modifications or code injections into the kernel by developers. Working within the scope of PatchGuard's restrictions, software developers must ensure compliance and a safe design to function seamlessly with the kernel.
+
+Initialization
+
+KiFilterFiberContext
+PatchGuard's initialization process is mainly carried out by the function KiFilterFiberContext, which initializes PatchGuard's contexts and verification mechanisms. KiFilterFiberContext is called twice during the boot process, with one of the methods involving an exception handler known as KiAmd64SpecificState. To trigger the exception handler and execute KiFilterFiberContext, a division error is intentionally triggered at the beginning of the boot process. The two values used to compute the division are known symbols - KdDebuggerNotPresent and KdPitchDebugger - which are used to determine whether a debugger is attached or not. If a debugger is present, PatchGuard is not initialized. In a normal scenario, the values of the two symbols are set to 1, which results in the idiv instruction computing the values rax=0x80000000, rdx=0x80000000 and r8d=0xffffffff. The computation of this division results in a divide error, which triggers the KiDivideErrorFault function to execute the KiFilterFiberContext function. KiFilterFiberContext is responsible for calling the initialization procedure that creates PatchGuard contexts, with specific arguments. It is worth noting that one of the arguments is hardcoded to 0, which suggests that it may be called from elsewhere. In fact, another initialization process has already been documented, which points to the function ExpLicenseWatchInitWorker.
+
+ExpLicenseWatchInitWorker
+The function in question is called ExpLicenseWatchInitWorker and is invoked before KeInitAmd64SpecificState in the boot process. It is part of Microsoft's PatchGuard, which verifies the authenticity of Microsoft licenses. The call stack shows that ExInitSystemPhase2 calls ExpGetNtProductTypeFromLicenseValue, which is related to license verification. ExpLicenseWatchInitWorker then calls KiFilterFiberContext, but only with a low probability of 4%, using random values generated by the rdtsc instruction. ExpLicenseWatchInitWorker includes some checks for the presence of a debugger and the safe boot mode, which are common security measures. The return value of the function is the random value generated by the rdtsc instruction, multiplied by a constant value of 0x51eb851f. If InitIsWinPEMode is true, the random returned value is later used as an index. KiFilterFiberContext is called with a structure built from values fetched from the PRCB (Process Register Control Block), specifically the HalReserved field, along with the pointer to KiFilterFiberContext. These fields are then cleaned right after. ExpLicenseWatchInitWorker sets the KiFilterParam and pKiFilterFiberContext pointers to Prcb.HalReserved[6] and Prcb.HalReserved[5], respectively. If InitSafeBootMode is not 0 or KUSER_SHARED_DATA.KdDebuggerEnabled >> 1, rand_stuff is returned. Otherwise, if random(0,100) ≤ 4, KiFilterFiberContext(pKiFilterFiberParam) is called. The two pointers, KiFilterParam and pKiFilterFiberContext, are set at the beginning of the boot in the function KiLockServiceTable. KiLockServiceTable fills the HalReserved field, with the first HalReserved field to be filled being the 6th. The structure held by KiServiceTablesLocked is named KI_FILTER_FIBER_PARAM and is a parameter given to the KiFilterFiberContext function. The KI_FILTER_FIBER_PARAM structure includes code_prefetch_rcx_retn, padding, pPsCreateSystemThread, and pKiBalanceSetManagerPeriodicDpc. Details about this structure involve a deep explanation of mechanisms used to trigger checks routines.
+
+PatchGuard Context
+Code:
+struct PatchGuardContext
+{
+constexpr auto  CmpAppendDllSection[];
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  nt!ExAcquireResourceSharedLite
+constexpr auto  nt!ExAcquireResourceExclusiveLite
+constexpr auto  nt!ExAllocatePoolWithTag
+constexpr auto  nt!ExFreePool
+constexpr auto  nt!ExMapHandleToPointer
+constexpr auto  nt!ExQueueWorkItem
+constexpr auto  nt!ExReleaseResourceLite
+constexpr auto  nt!ExUnlockHandleTableEntry
+constexpr auto  nt!ExAcquirePushLockExclusiveEx
+constexpr auto  nt!ExReleasePushLockExclusiveEx
+constexpr auto  nt!ExAcquirePushLockSharedEx
+constexpr auto  nt!ExReleasePushLockSharedEx
+constexpr auto  nt!KeAcquireInStackQueuedSpinLockAtDpcLevel
+constexpr auto  nt!ExAcquireSpinLockSharedAtDpcLevel
+constexpr auto  nt!KeBugCheckEx
+constexpr auto  nt!KeDelayExecutionThread
+constexpr auto  nt!KeEnterCriticalRegionThread
+constexpr auto  nt!KeLeaveCriticalRegion
+constexpr auto  nt!KeEnterGuardedRegion
+constexpr auto  nt!KeLeaveGuardedRegion
+constexpr auto  nt!KxReleaseQueuedSpinLock
+constexpr auto  nt!ExReleaseSpinLockSharedFromDpcLevel
+constexpr auto  nt!KeRevertToUserGroupAffinityThread
+constexpr auto  nt!KeProcessorGroupAffinity
+constexpr auto  nt!KeInitializeEnumerationContext
+constexpr auto  nt!KeEnumerateNextProcessor
+constexpr auto  nt!KeCountSetBitsAffinityEx
+constexpr auto  nt!KeQueryAffinityProcess
+constexpr auto  nt!KeQueryAffinityThread
+constexpr auto  nt!KeSetSystemGroupAffinityThread
+constexpr auto  nt!KeSetCoalescableTimer
+constexpr auto  nt!ObfDereferenceObject
+constexpr auto  nt!ObReferenceObjectByName
+constexpr auto  nt!RtlImageDirectoryEntryToData
+constexpr auto  nt!RtlImageNtHeader
+constexpr auto  nt!RtlLookupFunctionTable
+constexpr auto  nt!RtlPcToFileHeader
+constexpr auto  nt!RtlSectionTableFromVirtualAddress
+constexpr auto  nt!DbgPrint
+constexpr auto  nt!MmAllocateIndependentPages
+constexpr auto  nt!MmFreeIndependentPages
+constexpr auto  nt!MmSetPageProtection
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  nt!RtlLookupFunctionEntry
+constexpr auto  nt!KeAcquireSpinLockRaiseToDpc
+constexpr auto  nt!KeReleaseSpinLock
+constexpr auto  nt!MmGetSessionById
+constexpr auto  nt!MmGetNextSession
+constexpr auto  nt!MmQuitNextSession
+constexpr auto  nt!MmAttachSession
+constexpr auto  nt!MmDetachSession
+constexpr auto  nt!MmGetSessionIdEx
+constexpr auto  nt!MmIsSessionAddress
+constexpr auto  nt!MmIsAddressValid
+constexpr auto  nt!MmSessionGetWin32Callouts
+constexpr auto  nt!KeInsertQueueApc
+constexpr auto  nt!KeWaitForSingleObject
+constexpr auto  unknown;
+constexpr auto  nt!ExReferenceCallBackBlock
+constexpr auto  nt!ExGetCallBackBlockRoutine
+constexpr auto  nt!ExDereferenceCallBackBlock
+constexpr auto  nt!KiMarkBugCheckRegions+0x3c0
+constexpr auto  nt!PspEnumerateCallback
+constexpr auto  nt!CmpEnumerateCallback
+constexpr auto  nt!DbgEnumerateCallback
+constexpr auto  nt!ExpEnumerateCallback
+constexpr auto  nt!ExpGetNextCallback
+constexpr auto  nt!EmpCheckErrataList
+constexpr auto  nt!KiSchedulerApcTerminate
+constexpr auto  nt!KiSchedulerApc
+constexpr auto  nt!EmpCheckErrataList
+constexpr auto  nt!KiSwInterruptDispatch+0xfd0
+constexpr auto  nt!MmAllocatePagesForMdlEx
+constexpr auto  nt!MmAllocateMappingAddress
+constexpr auto  nt!MmMapLockedPagesWithReservedMapping
+constexpr auto  nt!MmUnmapReservedMapping
+constexpr auto  nt!KiSwInterruptDispatch+0xd220
+constexpr auto  nt!KiSwInterruptDispatch+0xd290
+constexpr auto  nt!MmAcquireLoadLock
+constexpr auto  nt!MmReleaseLoadLock
+constexpr auto  nt!KeEnumerateQueueApc
+constexpr auto  nt!KeIsApcRunningThread
+constexpr auto  nt!KiSwInterruptDispatch+0xeb0
+constexpr auto  nt!PsAcquireProcessExitSynchronization
+constexpr auto  nt!ObDereferenceProcessHandleTable
+constexpr auto  nt!PsGetNextProcess
+constexpr auto  nt!PsQuitNextProcess
+constexpr auto  nt!PsGetNextProcessEx
+constexpr auto  nt!MmIsSessionLeaderProcess
+constexpr auto  nt!PsInvokeWin32Callout
+constexpr auto  nt!MmEnumerateAddressSpaceAndReferenceImages
+constexpr auto  nt!PsGetProcessProtection
+constexpr auto  nt!PsGetProcessSignatureLevel
+constexpr auto  nt!PsGetProcessSectionBaseAddress
+constexpr auto  nt!SeCompareSigningLevels
+constexpr auto  nt!KeComputeSha256
+constexpr auto  nt!KeComputeParallelSha256
+constexpr auto  nt!KeSetEvent
+constexpr auto  nt!RtlpConvertFunctionEntry
+constexpr auto  nt!RtlpLookupPrimaryFunctionEntry
+constexpr auto  nt!RtlIsMultiSessionSku
+constexpr auto  nt!KiEnumerateCallback
+constexpr auto  nt!KeStackAttachProcess
+constexpr auto  nt!KeUnstackDetachProcess
+constexpr auto  nt!KeIpiGenericCall
+constexpr auto  nt!KiSwInterruptDispatch+0xd070
+constexpr auto  nt!MmGetPhysicalAddress
+constexpr auto  nt!MmUnlockPages
+constexpr auto  nt!VslVerifyPage
+constexpr auto  nt!KiGetInterruptObjectAddress
+constexpr auto  unknown;
+constexpr auto  nt!PsLookupProcessByProcessId
+constexpr auto  nt!PsGetProcessId
+constexpr auto  nt!MmCheckProcessShadow
+constexpr auto  nt!MmGetImageRetpolineCodePage
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  nt!matherr_flag+0x8
+constexpr auto  nt!TriageImagePageSize+0xa4
+constexpr auto  nt!TriageImagePageSize+0xac
+constexpr auto  nt!TriageImagePageSize+0xb4
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  nt!KiEntropyTimingRoutine
+constexpr auto  nt!KiProcessListHead
+constexpr auto  nt!KiProcessListLock
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  nt!PsActiveProcessHead
+constexpr auto  nt!PsInvertedFunctionTable
+constexpr auto  nt!PsLoadedModuleList
+constexpr auto  nt!PsLoadedModuleResource
+constexpr auto  nt!PsLoadedModuleSpinLock
+constexpr auto  nt!PspActiveProcessLock
+constexpr auto  nt!PspCidTable
+constexpr auto  nt!ExpUuidLock
+constexpr auto  nt!AlpcpPortListLock
+constexpr auto  nt!KeServiceDescriptorTable
+constexpr auto  nt!KeServiceDescriptorTableShadow
+constexpr auto  nt!KeServiceDescriptorTableFilter
+constexpr auto  nt!VfThunksExtended
+constexpr auto  nt!PsWin32CallBack
+constexpr auto  nt!TriageImagePageSize+0x84
+constexpr auto  nt!KiTableInformation
+constexpr auto  nt!HandleTableListHead
+constexpr auto  nt!HandleTableListLock
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  nt!SeProtectedMapping
+constexpr auto  unknown;
+constexpr auto  nt!KiStackProtectNotifyEvent
+constexpr auto  unknown;
+constexpr auto  nt!MmFreeIndependentPages  (nt+0x0)
+constexpr auto  hal!EmonQueryInformation  (hal+0x0)
+constexpr auto  nt!KeNumberProcessors
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  nt!RtlpInvertedFunctionTable
+constexpr auto  nt!KiIsrThunkShadow
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+constexpr auto  unknown;
+    // INCOMPL:FOR REF
+};
+The structure of the PatchGuard context is divided into three sections. The first section holds the core content of the PatchGuard mechanisms. The second section is a data recipient that keeps original data for later use, while the third section holds information about data to check.
+
+The first part
+The first part of the structure includes the code for the function CmpAppendDllSection, which is copied directly into the structure and is used later when the integrity check is triggered by PatchGuard. This code's primary function is to decrypt the rest of the PatchGuard context structure with a randomly generated key. The section also holds many function pointers from ntoskrnl API, which are kept this way so that PatchGuard routines can use them independently of a relocation.
+
+The second part of the structure includes many references to global variables, such as KiWaitAlways and KiWaitNever. These values are initialized randomly at boot time and are used to encode and decode PatchGuard DPC pointers. Additionally, it holds a pointer to another PatchGuard context structure, which is used multiple times as a clean backup of a structure. It is also the structure pointed by this global that is sent in case of a KeBugCheck, as one can see in the KiMarkBugCheckRegion.
+
+Finally, the third part of the structure includes common variables, such as Ntoskrnl and Hal base addresses, the current PRCB, and the maximum virtual addressing size. It also includes runtime variables, such as the total amount of data checked for a "check session." The data necessary for critical structure checksums is incremented after each checksum by the size of it and compared to a maximum. Additionally, the initialization vector used with checksums of critical structures and the shift value used to derive the initialization vector at each block iteration are initialized randomly with rdtsc. Finally, the checksum of the PatchGuard context is stored in itself and is used to detect any corruption.
+
+The second part
+The second part of the structure contains data that will be used later on. In Windows, entries are saved in this part of the structure to prevent bypass. These entries include PTEs, which are restored just before triggering KeBugCheck, and critical kernel routines, such as Hal, Ntoskrnl, and RtlpBreakWithStatusInstruction/DbgBreakPointWithStatus, among others. Each routine is identified by its respective offset in the structure and comes with its size so that the restore routine knows how much to rewrite.
+
+The third part
+The third part of the PatchGuard context structure contains an array of structures that hold information for each check that needs to be performed. Each structure has a KeBugCheckType field that distinguishes the type of structure being checked, such as IDT or GDT. The structure also contains a pointer to the data to be checked, its size, and a checksum that was computed during PatchGuard initialization as a reference for integrity checks. Additionally, there are specific entries in the structure for each type of check, such as the target processor for the IDT check. The array of structures is stored in the PatchGuard context structure, with several entries in the first part of the structure providing important information. These entries include the total count of critical structures in the array, the offset to the next critical structure to be checksummed, the offset to the first critical structure data, and the current count of checked structures. PatchGuard uses this information in its check algorithm.
+
+Initialization stage
+The initialization of the context is primarily carried out through a function called KiInitPatchGuardContext, which although unnamed, is documented in existing literature. However, there are alternative methods of initializing PatchGuard context, and in certain scenarios, separate mechanisms are established for system checking purposes.
+
+
+Different initialization methods
+As previously mentioned, the KiInitPatchGuardContext function is responsible for initializing most of the PatchGuard contexts, with the choice of method determined by the function arguments. These arguments are typically randomly chosen, as described in the KiFilterFiberContext overview. In this section, we will examine the arguments passed to this function and how they determine the initialization and triggering of PatchGuard checks.
+
+The function arguments are as follows:
+Arg 1: Index for DPC method
+Arg 2: Scheduling method
+Arg 3: Random value used to determine the maximum size to be checked
+Arg 4: Pointer to the structure from ExpLicenseWatchInitWorker (low chance)
+Arg 5: Boolean to decide whether or not the integrity of NT routines has to be checked
+
+Of these arguments, the 2nd one (the scheduling method) and the 4th one (which allows for additional scheduling methods) are the most significant. In KiFilterFiberContext, a random value is used as an index for the second argument, which determines the method to be used. In the following section, we will describe the various methods that KiInitPatchGuardContext can use in conjunction with the 4th argument.
+
+The known methods
+There are different methods that KiInitPatchGuardContext may use to initialize PatchGuard checks.
+
+The first method involves inserting a timer linked with a DPC. PatchGuard initializes a PatchGuard Context structure and a DPC structure and sets it in a timer structure. The timer is queued with KeSetCoalescableTimer and will fire the DPC from the first argument between 2 to 2'10" following the call. The TolerableDelay parameter is a random value between 0 and 0.001 second. This timer isn't periodic and needs to be restored at the end of the check routine.
+
+The second and third methods involve hiding the DPC in the kernel structure PRCB instead of using a timer. If the second parameter to KiInitPatchGuardContext is 1 or 2, PatchGuard initializes a context structure and a DPC structure and hides it in the PRCB. Legit functions from the system are responsible for queuing the DPC.
+
+For method 1, the pointer to the DPC is hidden in the field AcpiReserved from the PRCB. It is queued in HalpTimerDpcRoutine and checks that at least two minutes have elapsed between each check. The global variable HalpTimerLastDpc keeps track of when the last queue occurred, and its value is taken from the global variable, which is related to the uptime. HalpTimerDpcRoutine is called when a certain ACPI event occurs, such as transitioning to idle state.
+
+For method 2, the pointer to the DPC is hidden in the field HalReserved from the PRCB. It is queued by HalpMcaQueueDpc, also with a 2 minutes minimum period, and checks are done when HAL timer clock interrupt occurs, see HalpTimerClockInterrupt/HalpTimerAlwaysOnClockInterrupt. It is important to note that this field is also used to keep a pointer to the structure KI_FILTER_FIBER_PARAM when KiFilterFiberContext is called from ExpLicenseWatchInitWorker.
+
+For method 3, it involves creating a new system thread using a pointer to a KI_FILTER_FIBER_PARAM structure, which only occurs with a probability of 4%. The KI_FILTER_FIBER_PARAM structure contains a pointer to the PsCreateSystemThread function, which is used to create the new system thread. The newly created thread's StartAddress is set to a stub function that points to the PatchGuard verification routine. This thread creation is initiated directly in the KiInitPatchGuardContext function. An interesting obfuscation technique is used where PatchGuard modifies both the StartAddress and Win32StartAddress fields of the corresponding ETHREAD structure to common function pointers right after thread creation to avoid detection. To do this, PatchGuard acquires a random value between 0 and 7 and fetches a function pointer from an array of function names in memory at a specific offset. Out of the seven possible functions in the array, only the last one is the correct one for setting the StartAddress and Win32StartAddress fields.
+
+For method 4, the PatchGuard Context structure and an APC structure are initialized, and then inserted into an existing system thread with the NormalRoutine argument set to xHalTimerWatchdogStop, which is simply a "ret 0" instruction. The KernelRoutine is set to KiDispatchCallout, which will call the verification routine, and the RundownRoutine is NULL. The system thread to attach to is chosen using PsEnumProcessThreads with a callback, which queries the thread start address and compares the result with PopIrpWorkerControl. If a matching thread is found, then a pointer to the ETHREAD structure is stored at offset 0x830 in the PatchGuard context structure, and is later copied into the KAPC structure given to KeInsertQueueApc.
+
+For method 5, a valid KI_FILTER_FIBER_PARAM structure is required, otherwise, KiInitPatchGuardContext will fallback to method 0. The last entry of the structure is used, which is a pointer to the global variable KiBalanceSetManagerPeriodicDpc. This variable holds a KDPC structure, and its DPC routines are initialized in the function KiInitSystem. This method involves hooking a legitimate DPC that is queued by the system every second or so by KeClockInterruptNotify. PatchGuard hooks this legitimate DPC so that every 120 queues (or a random value between 120 and 130), the PatchGuard DPC is queued instead. If the PatchGuard DPC is queued, it first clears the copy of the global DPC and lets the verification routine set it back at the end of the check.
+
+There are more methods, but we will not be getting into it fully.
+
+
+Global context initialization
+
+When KiInitPatchGuardContext is called with index 7, a global PatchGuard context structure is initialized and can be accessed through a global pointer. While some mechanisms such as checksum are performed with a SHA256-related algorithm instead of the usual algorithm, we did not analyze these mechanisms specifically as the idea remains the same. It is important to note that the call to KiInitPatchGuardContext with index 7 occurs all the time and the global PatchGuard context is utilized by other new methods in comparison to Windows 8.1. This concludes the description of the various methods that PatchGuard can use to initialize a context. Additionally, other arguments given to KiInitPatchGuardContext can be described.
+
+Moving on to other arguments of the KiInitPatchGuardContext function, we have already discussed the importance of the second and fourth arguments. Now, let's look at the first argument, which is a pointer to a DPC routine. Since several PatchGuard methods use a DPC structure to hide PatchGuard and queue it at a certain point, it is essential to note that the verification routine is not directly set as the DPC's routine. Instead, the DPC will contain a pointer to a function that is known to unqueue DPC and perform specific operations when the DPC is a PatchGuard one.
+
+The first argument randomly selects an index to choose a routine, which will be set as one of the following functions:
+CmpEnableLazyFlushDpcRoutine
+ExpCenturyDpcRoutine
+ExpTimeZoneDpcRoutine
+ExpTimeRefreshDpcRoutine
+CmpLazyFlushDpcRoutine
+ExpTimerDpcRoutine
+IopTimerDispatch
+IopIrpStackProfilerDpcRoutine
+KiBalanceSetManagerDeferredRoutine
+PopThermalZoneDpc
+KiTimerDispatch/KiDpcDispatch
+KiTimerDispatch/KiDpcDispatch
+KiTimerDispatch/KiDpcDispatch
+
+For the last three routines, KiTimerDispatch and KiDpcDispatch, the choice between the two depends on whether the second argument is less than 3 or not. If it is less than 3, then KiTimerDispatch is used; otherwise, KiDpcDispatch is used.
+It is worth noting that in the previous pseudocode of the KiFilterFiberContext function, the first parameter is randomly chosen, except for the last call to KiInitPatchGuardContext, where it is set to 0 (CmpEnableLazyFlushDpcRoutine). However, it is not used in the initialization routine in this case.
+
+The third argument of KiInitPatchGuardContext is a random value used to determine the total size of data to be checked. This value is divided by the hardcoded value 0x140000, and the resulting value is immediately set into the PatchGuard context structure at offset 0x6cc. The maximum size of data (in bytes) to be checksummed at each PatchGuard check is determined by this value. PatchGuard maintains a list of structures to check the integrity of, and after each checksum, a counter is incremented by the size of the data. While the total amount of checked data is less than the maximum value defined earlier, PatchGuard proceeds with the next structure to check in its list.
+
+The fifth argument of KiInitPatchGuardContext is a boolean used to determine whether or not the checksum of ntoskrnl functions should be performed. This check is done and the result is stored in the PatchGuard context, along with other Windows Kernel structures that are checked by PatchGuard. In KiFilterFiberParam, this parameter is set to True only for the first call to KiInitPatchGuardContext.
+
+This concludes the description of the initialization methods that may come from KiInitPatchGuardContext. Other methods are initialized directly, or don't use any context structure at all.
+
+PatchGuardTVCallback aka 542875F90F9B47F497B64BA219CACF69 Callback
+The function KiFilterFiberContext contains a small callback function, which is not found in ntoskrnl and takes a function pointer called PatchGuardTVCallback as an argument. This pointer is initialized in the binary file mssecflt.sys in the function SecInitializeKernelIntegrityCheck. This function is called directly from the driver entry routine of mssecflt.sys, which is called during the boot process. The callback function, SecKernelIntegrityCallback, simply assigns the function pointer to a global variable and sets another global variable to SecProtectedRanges. The PatchGuardTVCallback function is one of the PatchGuard check routines and resembles the FsRtlMdlReadCompleteDevEx function, but with a different scheduling method. There is no other specific initialization for this method, as it uses the global PatchGuard context structure. If you wish to learn more about this callback, check out 542875F90F9B47F497B64BA219CACF69
+
+	This image has been resized. Click this bar to view the full image. The original image is sized 872x662.
+
+
+Additional checks
+
+PspProcessDelete
+Additional integrity checks can be found in specific functions like PspProcessDelete, where an integrity check is performed on the KeServiceDescriptorTable and KeServiceDescriptorTableShadow during process deletion. This check does not require any PatchGuard context structure or dedicated thread and is just a small piece of verification present in the system code. The original checksums for both tables, along with the initialization vector and the shift value necessary to compute the checksum, are available in a global variable, making it feasible for an attacker to patch an entry of the Descriptor Table (Shadow or not) and replace the original checksum. The checksum is computed using a random value generated with KiQueryUnbiaisedInterruptTime. If any of these checksums fail, a KeBugCheck is triggered through a DPC inserted with KiSchedulerDpc. The initialization of these checksums is performed in CmpInitDelayRefKCBEngine. To disable this method, one can patch the timer to infinity or compute the checksum of the modified table again, which is protected by PatchGuard.
+	This image has been resized. Click this bar to view the full image. The original image is sized 1038x697.
+
+
+KiInitializeUserApc
+Similar to PspProcessDelete, there is another function that includes an independent integrity verification for the Interrupt Descriptor Table (IDT). If a modification is detected, a DPC is injected with KiSchedulerDpc, which then triggers KeBugCheck. To disable this method, one can either set the timer to infinity.
+
+
+CcInitializeBcbProfiler
+PatchGuard uses a hidden method to perform checks using the CcInitializeBcbProfiler function. This function first calculates the checksum of a random routine in the ntoskrnl. It then sets up a DPC with the CcBcbProfiler routine and some additional data. The structure passed as a parameter contains everything needed to calculate the checksum of the random routine, including the function entry pointer, the base address of the image, the function size, the checksum, and random values used as seed for the checksum. The DPC is queued using KeSetCoalescableTimer with a DueTime set between 2' and 2'10". The CcBcbProfiler routine either queues the work item from the parameter as the WorkerRoutine, or continues its execution. The CcBcbProfiler routine's main objective being to perform an integrity check of the random ntoskrnl function and compare the result with the one stored in the structure. Both functions set up the timer again with KeSetCoalescableTimer afterwards.
+	This image has been resized. Click this bar to view the full image. The original image is sized 1195x647.
+
+
+Triggering contexts
+In the previous section, we discussed various methods used to establish context structures. This section focuses on how these context structures are activated, which can vary depending on the method used.
+
+Via DPC Execution
+One common method used by PatchGuard to initiate a check is through DPC. The DeferredRoutine function, which triggers the check, is selected from a pool of ten functions. Functions numbered 0 to 9 use an exception handler to activate the check (the random functions mentioned before), while KiTimerDispatch and KiDpcDispatch directly call the DPC without using this exception trick. Additionally, method 5 always uses the KiBalanceSetManagerDeferredRoutine function. The first step when one of the PatchGuard DPC functions is called is to determine whether the DPC is a PatchGuard DPC or a usual DPC. To do this, the function takes a DPC structure pointer as a parameter, which is used to check if the DPC comes from PatchGuard or not. The check is performed based on the argument KDPC.DeferredContext, by verifying if it has a canonical address or not. A simple code snippet is used to check if a DeferredContext has a canonical address or not. If the DeferredContext parameter has a non-canonical address, then the function calls KiCustomAccessRoutineN (N varies based on the function called) and executes what is known as "the Russian roulette trick".
+
+Triggering the exception handler
+After the check for the canonical address of the DeferredContext parameter, if it is found to be non-canonical, PatchGuard calls the function KiCustomAccessRoutineX. This function then calls KiCustomRecurseRoutineX with two parameters: a counter and the non-canonical DeferredContext. The counter is derived from the last two bits of the DeferredContext parameter plus one. The KiCustomRecurseRoutineX function consists of 10 circular functions that decrement the counter and call the next function until the counter reaches zero. This mechanism is illustrated in a diagram. The purpose is to keep decrementing the counter until an invalid pointer is dereferenced. Depending on the original function, a combination of try/except/finally handlers is used to decrypt the PatchGuard context structure. This mechanism is similar to playing Russian roulette, where one keeps pulling the trigger of a gun with one bullet until it fires.
+	This image has been resized. Click this bar to view the full image. The original image is sized 1075x284.
+
+
+Decrypting the context
+The responsibility of decrypting the first layer of the PatchGuard context structure lies with the exception handler. The decryption process involves two layers and a small trick. The first layer decrypts the entire structure, and then "a half" of it overwrites the header with hardcoded values. The second layer involves self-modifying code that decrypts the rest of the structure.
+
+Decrypting the first layer
+The initial step of decryption targets the entire PatchGuard context structure. There are various codes that can be used to accomplish this task, which are summarized below:
+CmpEnableLazyFlushDpcRoutine | Index: 0 | Method 1
+ExpCenturyDpcRoutine | Index: 1 | Method 1
+ExpTimeZoneDpcRoutine | Index: 2 | Method 1
+ExpTimeRefreshDpcRoutine | Index: 3 | Method 2
+CmpEnableLazyFlushDpcRoutine | Index: 4 | Method 1
+ExpTimerDpcRoutine | Index: 5 | Method 2
+IopTimerDispatch | Index: 6 | Method 2
+IopIrpStackProfilerDpcRoutine | Index: 7 | Method 1
+KiBalanceSetManagerDeferredRoutine | Index: 8 | Method 1
+PopThermalZoneDpc | Index: 9 | Method 2
+KiTimerDispatch | Index: 10-12 | Method 1 with a global variable
+KiDpcDispatch | Index: 10-12 | Not used
+
+The encryption and decryption routines used in PatchGuard rely on random values stored in global variables called KiWaitNever and KiWaitAlways. These variables hold randomly generated values during boot time and are used by KiInitPatchGuardContext to encrypt the PatchGuard context structure. This means that an attacker attempting to access the structure must have knowledge of the positions of these global variables, which requires access to both the ntoskrnl version and corresponding symbols information.
+
+Decrypting the first layer and "a half"
+Before applying the second layer of decryption, PatchGuard modifies the first four bytes of the PatchGuard structure with hard-coded values that represent the code used to decrypt the context through the third layer of decryption (CmdAppendDllSection). Different methods are used for this rewrite, such as rewriting each byte one by one or using the XOR of two hard-coded values. It is unclear why this is done this way, but it is possible that it was introduced as a just-in-time code optimization. Another possibility is that it was done to prevent certain values from being easily searchable in the code, but this does not seem like a difficult obstacle to overcome for an attacker.
+
+Decrypting the second and last layer
+The second and final layer of decryption involves the code for the second layer being present in the first part of the PatchGuard context structure. This code is called directly after the previous decryption layer is called. The second layer of decryption starts with multiple XOR instructions that are used to decrypt itself. The decryption process can be divided into two parts. The first part rewrites its own instruction and decrypts the next instruction. The second part is a decryption loop that decrypts the entire context structure.
+
+The verification routine
+After the decryption of the PatchGuard context structure, two functions are called in sequence. The first function, has two main purposes. Firstly, it verifies the integrity of the PatchGuard context structure and 47 critical routines or parts of routines related to PatchGuard. This is done by checking the code of these routines and comparing it against their expected values. If any modification is detected, PatchGuard triggers a KeBugCheck process. Secondly, the function initializes a WORK_QUEUE_ITEM structure and picks a stub to call a verification routine as a WorkItem. The stub can be a random one from the KiMachineCheckControl array, the copy of FsRtlUninitializeSmallMcb in the PatchGuard context structure. The WORK_QUEUE_ITEM structure is then passed as a parameter to ExQueueWorkItem, which starts the verification routine once a Worker thread processes the new item. For the DPC method, this mechanism is used to pass control to the verification routine.
+
+Via System Thread
+The third method utilized by PatchGuard involves the creation of a system thread, this function is called within KiInitPatchGuardContext.
+
+Triggering the exception handler
+The fault is caused by dereferencing a register that is considered "random".
+
+New thread creation
+This method involves creating a new system thread. The thread is created using the pointer to PsCreateSystemThread contained in the KI_FILTER_FIBER_PARAM structure. The StartContext parameter passed to PsCreateSystemThread is a pointer to a new structure called PG_StartContext, which contains a pointer to an event in the same structure, a boolean value, an unknown field, and a KEVENT object. The event is initialized in a function, and the newly created thread waits on this event to be signaled using KeWaitForSingleObject in the stub function. The event is signaled at the end of KiInitPatchGuardContext, and the decryption and check process begins. Step 3 involves the decryption process, which is the same as the one used by DPCs, using two-stage decryption with an additional hard-coded prologue. The first stage uses KiWaitNever and KiWaitAlways, and the second stage is performed by CmpAppendDllSection's copy, leading to the verification routine. After the verification routine ends, the context is restored to a waiting state using either KeDelayExecutionThread or KeWaitForSingleObject with a timeout set between 2 and 2 minutes and 10 seconds, which is an important location to search for PatchGuard threads in a disabling driver.
+
+Via APC insertion
+As previously described, the fourth method involves inserting an APC into a system thread queue with a StartAddress pointing to PopIrpWorkerControl and a KernelRoutine parameter of KiDispatchCallout. Similar to the DPC and system thread methods, it employs a two-stage decryption routine and overwrites the first part of the context with a hard-coded XOR value. This approach is relatively quick due to the fast delivery of APCs. However, similar to the previous methods, a verification wait is employed to ensure a minimum amount of time has passed, with a wait time of between 2 to 2.10 seconds. It is important to note that when searching for PatchGuard threads in the disabling driver, this method should also be considered.
+
+Via Global variable call
+In the KiFilterFiberContext method, a callback function is notified, the TV callback we talked about before (PatchGuardTVCallback), which places a pointer to the check routine in a global variable from mssecflt.sys. This method utilizes the global PatchGuard context structure, which is initialized by KiInitPatchGuardContext when the second argument is 7. Unlike other methods, the decryption process is not required for this method since the global PatchGuard structure is in clear text in memory. The check routine may be called up to five times until the returned status differs from STATUS_MORE_PROCESSING_REQUIRED. Cross-referencing this function shows that it can be called from different paths, with the most interesting being SetGetProcessContextWithAssertion, which can be called from several callback functions such as SecPreCleanup, SecSendFileDeleteEvent, SecSendFileModifyEvent, and more. The call to the check routine goes straightforward to checks, and no code responsible for modifying the behavior of PatchGuard regarding the method is present in this version of the check routine.
+
+Via KiSwInterruptDispatch
+Similar to the global variable method, this technique also utilizes the PatchGuard context structure that exists in clear text in memory. Hence, there is no requirement for a decryption process, and the verification routine is directly invoked at a certain stage in KiSwInterrupt, which is an IDT function.
+
+
+The verification phase
+This section discusses the different verification routines used in PatchGuard, including FsRtlMdlReadCompleteDevEx, which is the main routine. The function can be divided into several parts, including the prologue, which involves checksumming the pg_ctx parts and re-encrypting part 1, followed by a checksum of parts 2 and 3, and waiting. The function then decrypts part 1, performs checksums of parts 2 and 3, and compares them to the saved checksum. It also performs a checksum of part 1 and sets the affinity thread.
+
+
+Prologue
+PatchGuard begins by checking the integrity of the whole PatchGuard context structure, which is now in plain text in memory. It compares the checksum result with the one stored before the decryption of the context, which was initialized in KiInitPatchGuardContext. Before the checksum is performed, variable data is saved on the stack and cleared from the structure to ensure that the checksum remains the same. This includes values like the context checksum and structures like the WorkItem.
+PatchGuard proceeds to re-encrypt the first part of the PatchGuard context structure. It is unclear why the rest of the structure is not encrypted.
+PatchGuard performs another checksum of part 2 and 3 from the context, which contain the full code of some NT routines, along with an array containing information for each critical structure to be verified later. These parts are not re-encrypted by PatchGuard before the wait.
+The wait (sleep) ensures that at least two minutes have elapsed between two checks. It can be performed with one of three different methods: an unnamed function, KeWaitForSingleObject, or KeDelayExecutionThread.
+In the main function, the first part of the context is decrypted back without any additional steps.
+A checksum is performed on part 2 and 3 of the context to ensure that no modifications occurred during the wait. The original checksum was previously stored in a register and pushed/popped on the stack by the wait routine, making it difficult to find and modify.
+The first 0x618 bytes of the context, which contain function pointers but no hashes or variables, are checksummed. The result is compared to the original checksum computed during the context initialization in KiInitPatchGuardContext, which is stored at offset 0x8b8 in the structure.
+To determine the processor on which the check will run, PatchGuard retrieves the SessionId previously set in KiInitPatchGuardContext and generates a random value between 0 and the total amount of processes on the system. Instead of selecting a random PID, PatchGuard loops and fetches the n-th process, where n is the random value. Next, PatchGuard attaches to this process and retrieves its Group Affinity. A random value between 0 and the number of processors that may run this thread is obtained by performing a Hamming weight on the bitmap representing the affinity. With the random value n, PatchGuard selects the n-th processor obtained with a loop using KeEnumerateNextProcessor and sets the new affinity to this processor. For example, if a thread may run on processors 1, 2, and 6, PatchGuard will select a random value 0 <= n < 3 and set its system affinity to n using KeSetSystemGroupAffinityThread.
+
+Kernel structures' integrity checks
+The PatchGuard algorithm operates on various data structures contained in the PatchGuard context structure. This structure includes information such as pointers to the data to be checked, data size, type, and checksum computed during initialization. The algorithm begins by dispatching the type of data to be checked to determine the next structure that will be checked after the current one. This is important because some structures may require preliminary checks or operations before proceeding with the integrity verification using a checksum. Once the integrity of the selected structure is verified, PatchGuard increments the total amount of data checked and compares it with the maximum defined in the third parameter of KiInitPatchGuardContext. If the total amount hasn't been reached, PatchGuard proceeds with the next entry in the array of critical data structures. For the second part, PatchGuard computes a checksum on the table pointed to by the Interrupt Descriptor Table (IDT) register. After the hash computation, PatchGuard restores the previous processor affinity and compares the obtained hash with the one stored in memory.
+
+Epilogue
+The epilogue of the PatchGuard check routine has two parts: one for when a modification is detected, and one for when everything is fine. When the final hash comparison of a structure is completed, if the total amount of data checked is below the maximum defined in KiInitPatchGuardContext, then PatchGuard proceeds with the next structure from the array. If it's above the maximum, it will re-arm the PatchGuard context for later use, which is similar to the initialization process. For methods 0, 1, 2, 4, and 5, the code is almost identical to the initialization process. The methods involve calling KeSetCoalescableTimer, storing a DPC in KPRCB.AcpiReserved and KPRCB.HalReserved, inserting an APC with KeInsertQueueApc, or setting a DPC in a global variable. For the third method, which creates a system thread, it is rearmed but not in the same main function. Once the verification routine is done, a small dispatcher chooses between KeDelayExecutionThread or KeWaitForSingleObject. If KeDelayExecutionThread is chosen, a timeout between 2' and 2'10" is set. If KeWaitForSingleObject is used, the same timeout of 2' is set this time. The event that was notified through KeSetEvent at the end of KiInitPatchGuardContext for the seventh method is reset in this case, and there is a 50% chance that it will never be set again.
+
+When a modification is detected:
+After the checksum is completed for the IDT case in PatchGuard, the original affinity for the current thread is restored and the computed hash is compared to the one from the initialization stage. If a modification is detected, PatchGuard triggers a BSOD after performing some specific actions.
+
+First, PatchGuard puts the structure in a common state to compute the checksum by saving values on the stack and clearing them from the context. This includes the checksum of the full context structure, the total size of checked data, and the workitem, which is saved on the stack and zeroed from the context. Then, the checksum for the full structure is performed. After this, the workitem is restored in the context from the stack and the checksum result is stored at a specific offset. Although this checksum isn't compared to the previous one, it doesn't seem to be that critical. Next, PatchGuard proceeds to reencrypt the code of CmpAppendDllSection at the beginning of the PatchGuard context. It's unclear why this encryption is necessary, especially since the rest of the structure remains in clear text for now. During the re-encryption process, with the newly encrypted data being the selected part and the rest of it being the data that is encrypted immediately afterward.
+
+After detecting a potential attack, the next step in the process is to restore sensitive data. When calling KeBugCheck, PatchGuard prefers to rewrite PTE and Windows critical routines instead of checking integrity. The PTE are first fetched with KeAquireSpinLockForDpc from the context to manipulate them safely. A "trick" is used in which the "mov cr4" instruction flushes the TLB, including global entries, by modifying the 7th bit, which is the PGE. The next part of the rewrite involves critical routines such as KeBugCheckEx, KeBugCheck, or KeIsEmptyAffinityEx, which are rewritten and stored as an array of pairs (pFunction, size_of_routine) in the PatchGuard context. The DbgPrint routine is also rewritten with 0xC3, which is a "ret" instruction, as an anti-debug measure. PatchGuard clears two offsets from the context structure at 0x610 and 0x690, although the reason for this is unknown. Finally, PatchGuard calls KeGuardCheckICall with KeBugCheckEx as an argument, but if the scheduling method used is not 7, then SdpbCheckDll is called instead of KeBugCheckEx.
+
+A word of appreciation:
+Thanks for sticking around and reading this through, do check out other posts on my blog too, I have started my research on Microsoft's Hyper-V around January and will soon write about my journey and hurdles surrounding it!
+zerocondition.com

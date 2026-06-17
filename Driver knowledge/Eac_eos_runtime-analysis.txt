@@ -1,0 +1,747 @@
+EasyAntiCheat EOS Driver - Runtime Analysis
+
+Follow-up to my static analysis post. Dumped the driver from kernel memory and dug through what's actually happening at runtime. This covers some of the detection mechanisms I mentioned I'd look into.
+
+I will be live debugging the driver in the next few days, but this is just a runtime dump to see what is different.
+
+One thing worth noting upfront - the runtime dump is a different build than the static binary I analyzed before. Different hash, different size (38MB vs 23MB), and different crypto parameters. EAC ships multiple variants, so your mileage may vary.
+
+
+Binary Differences
+
+The runtime dump came out significantly larger:
+
+Code:
+Static:  23.3 MB, SHA256: 7e7f9cfd...
+Runtime: 38.4 MB, SHA256: 26da7d4b...
+The extra ~15MB is mostly the virtualized section unpacking at runtime. Also found an extra segment (seg004, 24KB) that wasn't in the static binary. The virtualized section jumped from 21MB to 35MB once loaded.
+
+The hardcoded modulus for API resolution is completely different:
+
+Code:
+Static:  0x199F07D3B49761CB
+Runtime: 0x8123AD9AFB36519
+So if you're trying to use specific values from someone else's analysis, make sure you're on the same build.
+
+
+API Obfuscation (Confirmed)
+
+The RSA-style resolver I described in the static analysis is confirmed. Exponent is still 17 for me, dual modulus system still applies:
+
+Code:
+// Primary resolver at sub_FFFFF80251340000
+uint64_t resolve_api(uint64_t* context) {
+    // Low 32 bits: base^17 mod runtime_modulus
+    uint32_t low = modexp(*context, 17, qword_FFFFF8025150D3B8);
+ 
+    // High 32 bits: base^17 mod 0x8123AD9AFB36519
+    uint32_t high = modexp(value, 17, 0x8123AD9AFB36519);
+ 
+    return ((uint64_t)high << 32) | low;
+}
+Found 200+ call sites to this resolver. After it returns, the ROR/XOR pattern from static analysis applies. @Sternht was able to give a full map of the imports, shown below.
+
+Code:
+EACOffset: 0x1FC660, ModuleOffset: 0x2BD230, Module: ntoskrnl.exe, Import: PsIsThreadTerminating
+EACOffset: 0x1FC380, ModuleOffset: 0x3485A0, Module: ntoskrnl.exe, Import: PsGetProcessCreateTimeQuadPart
+EACOffset: 0x1FC350, ModuleOffset: 0x6D29C0, Module: ntoskrnl.exe, Import: PsReferenceProcessFilePointer
+EACOffset: 0x1FC340, ModuleOffset: 0x654880, Module: ntoskrnl.exe, Import: ObCloseHandle
+EACOffset: 0x1FC330, ModuleOffset: 0x6A0F20, Module: ntoskrnl.exe, Import: NtSetInformationProcess
+EACOffset: 0x1FC320, ModuleOffset: 0x35D640, Module: ntoskrnl.exe, Import: PsGetProcessExitProcessCalled
+EACOffset: 0x1FC310, ModuleOffset: 0x63F9E0, Module: ntoskrnl.exe, Import: SeCaptureSubjectContext
+EACOffset: 0x1FC2F0, ModuleOffset: 0x632FD0, Module: ntoskrnl.exe, Import: NtWaitForSingleObject
+EACOffset: 0x1FC2C0, ModuleOffset: 0x705E60, Module: ntoskrnl.exe, Import: PsReleaseProcessExitSynchronization
+EACOffset: 0x1FC2B0, ModuleOffset: 0x22DDE0, Module: ntoskrnl.exe, Import: PsGetProcessInheritedFromUniqueProcessId
+EACOffset: 0x1FC2A0, ModuleOffset: 0x6385D0, Module: ntoskrnl.exe, Import: SeLockSubjectContext
+EACOffset: 0x1FC280, ModuleOffset: 0x34CFB0, Module: ntoskrnl.exe, Import: PsGetProcessPeb
+EACOffset: 0x1FC260, ModuleOffset: 0xCFC410, Module: ntoskrnl.exe, Import: PsProcessType
+EACOffset: 0x1FC250, ModuleOffset: 0x360C30, Module: ntoskrnl.exe, Import: RtlPcToFileHeader
+EACOffset: 0x1FC220, ModuleOffset: 0x913B90, Module: ntoskrnl.exe, Import: RtlCreateUserThread
+EACOffset: 0x1FC210, ModuleOffset: 0x2690, Module: tbs.sys, Import: Tbsi_Context_Create
+EACOffset: 0x1FC200, ModuleOffset: 0x3360, Module: tbs.sys, Import: Tbsip_Submit_Command
+EACOffset: 0x1FC1F0, ModuleOffset: 0x32E0, Module: tbs.sys, Import: Tbsip_Cancel_Commands
+EACOffset: 0x1FC1E0, ModuleOffset: 0x3320, Module: tbs.sys, Import: Tbsip_Context_Close
+EACOffset: 0x1FC1D0, ModuleOffset: 0x2870, Module: tbs.sys, Import: Tbsi_GetDeviceInfo
+EACOffset: 0x1FC1C0, ModuleOffset: 0x6FD950, Module: ntoskrnl.exe, Import: NtOpenKey
+EACOffset: 0x1FC1A0, ModuleOffset: 0x31F7B0, Module: ntoskrnl.exe, Import: MmGetPhysicalAddress
+EACOffset: 0x1FC180, ModuleOffset: 0x3B490, Module: FLTMGR.SYS, Import: FltQueryInformationFile
+EACOffset: 0x1FC170, ModuleOffset: 0x10C0, Module: FLTMGR.SYS, Import: FltReadFile
+EACOffset: 0x1FC160, ModuleOffset: 0xBDF0, Module: FLTMGR.SYS, Import: FltGetRequestorProcess
+EACOffset: 0x1FC150, ModuleOffset: 0x4C790, Module: FLTMGR.SYS, Import: FltStartFiltering
+EACOffset: 0x1FC140, ModuleOffset: 0x1A490, Module: FLTMGR.SYS, Import: FltAllocatePoolAlignedWithTag
+EACOffset: 0x1FC130, ModuleOffset: 0x5A5C0, Module: FLTMGR.SYS, Import: FltUnregisterFilter
+EACOffset: 0x1FC120, ModuleOffset: 0x1A530, Module: FLTMGR.SYS, Import: FltFreePoolAlignedWithTag
+EACOffset: 0x1FBDA0, ModuleOffset: 0x30EB50, Module: ntoskrnl.exe, Import: MmFreeContiguousMemory
+EACOffset: 0x1FBD90, ModuleOffset: 0x257BA0, Module: ntoskrnl.exe, Import: ExReleaseFastMutex
+EACOffset: 0x1FBD70, ModuleOffset: 0x6EAEF0, Module: ntoskrnl.exe, Import: IoGetDeviceInterfaces
+EACOffset: 0x1FBD60, ModuleOffset: 0x70CA40, Module: ntoskrnl.exe, Import: IoOpenDeviceRegistryKey
+EACOffset: 0x1FBD40, ModuleOffset: 0x259E10, Module: ntoskrnl.exe, Import: ExReleasePushLockEx
+EACOffset: 0x1FBD30, ModuleOffset: 0x2EE320, Module: ntoskrnl.exe, Import: IoBuildDeviceIoControlRequest
+EACOffset: 0x1FBD20, ModuleOffset: 0x39B1F0, Module: ntoskrnl.exe, Import: IoEnumerateDeviceObjectList
+EACOffset: 0x1FBD10, ModuleOffset: 0x703F30, Module: ntoskrnl.exe, Import: IoGetDeviceProperty
+EACOffset: 0x1FBCE0, ModuleOffset: 0x30DA80, Module: ntoskrnl.exe, Import: MmMapIoSpaceEx
+EACOffset: 0x1FBCC0, ModuleOffset: 0x22E370, Module: ntoskrnl.exe, Import: IoThreadToProcess
+EACOffset: 0x1FBC90, ModuleOffset: 0x3D09F0, Module: ntoskrnl.exe, Import: __C_specific_handler
+EACOffset: 0x1FBC80, ModuleOffset: 0x32BFC0, Module: ntoskrnl.exe, Import: IoGetTopLevelIrp
+EACOffset: 0x1FBC70, ModuleOffset: 0x6F27B0, Module: ntoskrnl.exe, Import: NtOpenSymbolicLinkObject
+EACOffset: 0x1FBC60, ModuleOffset: 0x586950, Module: ntoskrnl.exe, Import: RtlTimeToSecondsSince1970
+EACOffset: 0x1FBC50, ModuleOffset: 0x6846D0, Module: ntoskrnl.exe, Import: IoGetDeviceObjectPointer
+EACOffset: 0x1FBC40, ModuleOffset: 0x205DE0, Module: ntoskrnl.exe, Import: PsGetProcessSessionId
+EACOffset: 0x1FBC30, ModuleOffset: 0x350AB0, Module: ntoskrnl.exe, Import: PsGetProcessImageFileName
+EACOffset: 0x1FBC20, ModuleOffset: 0x208F00, Module: ntoskrnl.exe, Import: KeInitializeDpc
+EACOffset: 0x1FBC10, ModuleOffset: 0x2BF2F0, Module: ntoskrnl.exe, Import: KeAreAllApcsDisabled
+EACOffset: 0x1FBC00, ModuleOffset: 0x2DB490, Module: ntoskrnl.exe, Import: RtlRandomEx
+EACOffset: 0x1FBBF0, ModuleOffset: 0x684B50, Module: ntoskrnl.exe, Import: NtQueryInformationProcess
+EACOffset: 0x1FBBE0, ModuleOffset: 0x2661E0, Module: ntoskrnl.exe, Import: KeInsertQueueDpc
+EACOffset: 0x1FBBD0, ModuleOffset: 0x6F2B30, Module: ntoskrnl.exe, Import: NtQuerySymbolicLinkObject
+EACOffset: 0x1FBBC0, ModuleOffset: 0x3D020, Module: FLTMGR.SYS, Import: FltReleaseFileNameInformation
+EACOffset: 0x1FBBB0, ModuleOffset: 0x3A320, Module: FLTMGR.SYS, Import: FltGetFileNameInformationUnsafe
+EACOffset: 0x1FBBA0, ModuleOffset: 0x33DF90, Module: ntoskrnl.exe, Import: KeFlushQueuedDpcs
+EACOffset: 0x1FBB90, ModuleOffset: 0x36F030, Module: ntoskrnl.exe, Import: RtlTimeToTimeFields
+EACOffset: 0x1FBB80, ModuleOffset: 0x60AA20, Module: ntoskrnl.exe, Import: PsReferencePrimaryToken
+EACOffset: 0x1FBB70, ModuleOffset: 0x719FE0, Module: ntoskrnl.exe, Import: IoDeleteController
+EACOffset: 0x1FC0F0, ModuleOffset: 0x22418, Module: ntoskrnl.exe, Import: MmUserProbeAddress
+EACOffset: 0x1FC0E0, ModuleOffset: 0x331DB0, Module: ntoskrnl.exe, Import: PsGetThreadWin32Thread
+EACOffset: 0x1FC0D0, ModuleOffset: 0x71F2B0, Module: ntoskrnl.exe, Import: RtlUnicodeToUTF8N
+EACOffset: 0x1FC0C0, ModuleOffset: 0x61F010, Module: ntoskrnl.exe, Import: RtlCompareUnicodeString
+EACOffset: 0x1FC0B0, ModuleOffset: 0x6C3CE0, Module: ntoskrnl.exe, Import: RtlMultiByteToUnicodeN
+EACOffset: 0x1FC8B0, ModuleOffset: 0x7D7D60, Module: ntoskrnl.exe, Import: SeRegisterImageVerificationCallback
+EACOffset: 0x1FC5D0, ModuleOffset: 0x682380, Module: ntoskrnl.exe, Import: ObQueryNameString
+EACOffset: 0x1FC5C0, ModuleOffset: 0x2A30F0, Module: ntoskrnl.exe, Import: IoGetCurrentProcess
+EACOffset: 0x1FC5B0, ModuleOffset: 0x2DD2F0, Module: ntoskrnl.exe, Import: PsGetProcessId
+EACOffset: 0x1FC5A0, ModuleOffset: 0x633120, Module: ntoskrnl.exe, Import: NtClose
+EACOffset: 0x1FC580, ModuleOffset: 0x2EE300, Module: ntoskrnl.exe, Import: ExGetPreviousMode
+EACOffset: 0x1FC570, ModuleOffset: 0x63A280, Module: ntoskrnl.exe, Import: NtQueryValueKey
+EACOffset: 0x1FC560, ModuleOffset: 0x60B460, Module: ntoskrnl.exe, Import: ObOpenObjectByPointer
+EACOffset: 0x1FC550, ModuleOffset: 0x33D060, Module: ntoskrnl.exe, Import: PsGetCurrentThreadId
+EACOffset: 0x1FC540, ModuleOffset: 0x260900, Module: ntoskrnl.exe, Import: PsGetCurrentProcessId
+EACOffset: 0x1FC520, ModuleOffset: 0x229FD0, Module: ntoskrnl.exe, Import: KeClearEvent
+EACOffset: 0x1FC510, ModuleOffset: 0x324B60, Module: ntoskrnl.exe, Import: KeLeaveGuardedRegion
+EACOffset: 0x1FC500, ModuleOffset: 0x32A5C0, Module: ntoskrnl.exe, Import: KeEnterGuardedRegion
+EACOffset: 0x1FC4F0, ModuleOffset: 0x70BE80, Module: ntoskrnl.exe, Import: NtQueryDirectoryFile
+EACOffset: 0x1FC4C0, ModuleOffset: 0x60C840, Module: ntoskrnl.exe, Import: NtCreateEvent
+EACOffset: 0x1FC4B0, ModuleOffset: 0x5FAA90, Module: ntoskrnl.exe, Import: NtTraceControl
+EACOffset: 0x1FC490, ModuleOffset: 0x21D470, Module: ntoskrnl.exe, Import: KeWaitForMultipleObjects
+EACOffset: 0x1FC480, ModuleOffset: 0x345510, Module: ntoskrnl.exe, Import: RtlInitializeBitMap
+EACOffset: 0x1FC470, ModuleOffset: 0xCFC470, Module: ntoskrnl.exe, Import: ExEventObjectType
+EACOffset: 0x1FC460, ModuleOffset: 0x538160, Module: ntoskrnl.exe, Import: MmIsAddressValid
+EACOffset: 0x1FC450, ModuleOffset: 0x959CB0, Module: ntoskrnl.exe, Import: ExRaiseAccessViolation
+EACOffset: 0x1FC440, ModuleOffset: 0x533750, Module: ntoskrnl.exe, Import: MmGetVirtualForPhysical
+EACOffset: 0x1FC430, ModuleOffset: 0x77F3D0, Module: ntoskrnl.exe, Import: ExRaiseDatatypeMisalignment
+EACOffset: 0x1FC420, ModuleOffset: 0x2DF140, Module: ntoskrnl.exe, Import: PsIsProtectedProcess
+EACOffset: 0x1FC410, ModuleOffset: 0x336940, Module: ntoskrnl.exe, Import: PsGetProcessWow64Process
+EACOffset: 0x1FC400, ModuleOffset: 0x5E7D10, Module: ntoskrnl.exe, Import: PsAcquireProcessExitSynchronization
+EACOffset: 0x1FC3F0, ModuleOffset: 0x6407A0, Module: ntoskrnl.exe, Import: SeReleaseSubjectContext
+EACOffset: 0x1FC3E0, ModuleOffset: 0x2F1790, Module: ntoskrnl.exe, Import: PsIsProtectedProcessLight
+EACOffset: 0x1FC3B0, ModuleOffset: 0x2DF0F0, Module: ntoskrnl.exe, Import: PsGetProcessSectionBaseAddress
+EACOffset: 0x1FC3A0, ModuleOffset: 0x6F6C90, Module: ntoskrnl.exe, Import: NtSetInformationObject
+EACOffset: 0x1FC390, ModuleOffset: 0x2D1AF0, Module: ntoskrnl.exe, Import: ObIsKernelHandle
+EACOffset: 0x1FC940, ModuleOffset: 0xCFC420, Module: ntoskrnl.exe, Import: PsInitialSystemProcess
+EACOffset: 0x1FC370, ModuleOffset: 0x6D2A40, Module: ntoskrnl.exe, Import: NtTerminateProcess
+EACOffset: 0x1FC360, ModuleOffset: 0x62BD20, Module: ntoskrnl.exe, Import: NtAllocateVirtualMemoryEx
+EACOffset: 0x1FC0A0, ModuleOffset: 0x61C700, Module: ntoskrnl.exe, Import: RtlCompareString
+EACOffset: 0x1FC070, ModuleOffset: 0x4B9B90, Module: ntoskrnl.exe, Import: HalAcpiGetTableEx
+EACOffset: 0x1FC060, ModuleOffset: 0x3D15D0, Module: ntoskrnl.exe, Import: _vsnwprintf
+EACOffset: 0x1FC050, ModuleOffset: 0x1EDC0, Module: cng.sys, Import: BCryptOpenAlgorithmProvider
+EACOffset: 0x1FC040, ModuleOffset: 0xDAF0, Module: cng.sys, Import: BCryptCreateHash
+EACOffset: 0x1FC030, ModuleOffset: 0xCFA0, Module: cng.sys, Import: BCryptDestroyKey
+EACOffset: 0x1FC020, ModuleOffset: 0x1E180, Module: cng.sys, Import: BCryptDecrypt
+EACOffset: 0x1FC010, ModuleOffset: 0x1EA50, Module: cng.sys, Import: BCryptSetProperty
+EACOffset: 0x1FBFE0, ModuleOffset: 0xD760, Module: cng.sys, Import: BCryptDestroyHash
+EACOffset: 0x1FBFC0, ModuleOffset: 0x5B00, Module: cng.sys, Import: BCryptHashData
+EACOffset: 0x1FBFB0, ModuleOffset: 0xDF90, Module: cng.sys, Import: BCryptGetProperty
+EACOffset: 0x1FBF90, ModuleOffset: 0x156C0, Module: cng.sys, Import: BCryptVerifySignature
+EACOffset: 0x1FBF80, ModuleOffset: 0x2C560, Module: cng.sys, Import: BCryptImportKeyPair
+EACOffset: 0x1FBF70, ModuleOffset: 0x2C2E0, Module: cng.sys, Import: BCryptCloseAlgorithmProvider
+EACOffset: 0x1FBF60, ModuleOffset: 0xCE30, Module: cng.sys, Import: BCryptGenerateSymmetricKey
+EACOffset: 0x1FBF50, ModuleOffset: 0xD820, Module: cng.sys, Import: BCryptFinishHash
+EACOffset: 0x1FBF30, ModuleOffset: 0x257590, Module: ntoskrnl.exe, Import: KeAcquireSpinLockAtDpcLevel
+EACOffset: 0x1FBF00, ModuleOffset: 0x608A50, Module: ntoskrnl.exe, Import: NtQueryInformationThread
+EACOffset: 0x1FBEF0, ModuleOffset: 0x582960, Module: ntoskrnl.exe, Import: PsGetCurrentThreadStackBase
+EACOffset: 0x1FBEE0, ModuleOffset: 0x2BABF0, Module: ntoskrnl.exe, Import: KeAlertThread
+EACOffset: 0x1FBED0, ModuleOffset: 0x22E370, Module: ntoskrnl.exe, Import: IoThreadToProcess
+EACOffset: 0x1FBEC0, ModuleOffset: 0x582980, Module: ntoskrnl.exe, Import: PsGetCurrentThreadStackLimit
+EACOffset: 0x1FBEB0, ModuleOffset: 0x257690, Module: ntoskrnl.exe, Import: KeReleaseSpinLockFromDpcLevel
+EACOffset: 0x1FBEA0, ModuleOffset: 0xCFC440, Module: ntoskrnl.exe, Import: PsThreadType
+EACOffset: 0x1FBE90, ModuleOffset: 0x5F8520, Module: ntoskrnl.exe, Import: NtReadFile
+EACOffset: 0x1FBE80, ModuleOffset: 0x62F640, Module: ntoskrnl.exe, Import: NtQueryInformationFile
+EACOffset: 0x1FBE70, ModuleOffset: 0x9B8010, Module: ntoskrnl.exe, Import: ExAllocatePoolWithTag
+EACOffset: 0x1FBE60, ModuleOffset: 0x65B280, Module: ntoskrnl.exe, Import: NtOpenFile
+EACOffset: 0x1FBE50, ModuleOffset: 0x6FD160, Module: ntoskrnl.exe, Import: NtOpenSection
+EACOffset: 0x1FBE10, ModuleOffset: 0x22410, Module: ntoskrnl.exe, Import: MmHighestUserAddress
+EACOffset: 0x1FBE00, ModuleOffset: 0x261080, Module: ntoskrnl.exe, Import: KeInitializeEvent
+EACOffset: 0x1FBDF0, ModuleOffset: 0x30DAD0, Module: ntoskrnl.exe, Import: MmAllocateContiguousNodeMemory
+EACOffset: 0x1FBDE0, ModuleOffset: 0x254470, Module: ntoskrnl.exe, Import: KeWaitForMutexObject
+EACOffset: 0x1FBDD0, ModuleOffset: 0x259000, Module: ntoskrnl.exe, Import: ExAcquireFastMutex
+EACOffset: 0x1FBDC0, ModuleOffset: 0x2F34C0, Module: ntoskrnl.exe, Import: KeReleaseMutex
+EACOffset: 0x1FB7F0, ModuleOffset: 0x609FA0, Module: ntoskrnl.exe, Import: NtCreateSection
+EACOffset: 0x1FB3D0, ModuleOffset: 0x62B6E0, Module: ntoskrnl.exe, Import: NtProtectVirtualMemory
+EACOffset: 0x1FB3C0, ModuleOffset: 0x648E50, Module: ntoskrnl.exe, Import: NtFreeVirtualMemory
+EACOffset: 0x1FB3B0, ModuleOffset: 0x6F3AA0, Module: ntoskrnl.exe, Import: NtFlushVirtualMemory
+EACOffset: 0x1FB3A0, ModuleOffset: 0x650BB0, Module: ntoskrnl.exe, Import: NtSetInformationVirtualMemory
+EACOffset: 0x1FB390, ModuleOffset: 0x62CFE0, Module: ntoskrnl.exe, Import: NtAllocateVirtualMemory
+EACOffset: 0x1FB380, ModuleOffset: 0x653360, Module: ntoskrnl.exe, Import: NtQueryVirtualMemory
+EACOffset: 0x1FB370, ModuleOffset: 0x6F5740, Module: ntoskrnl.exe, Import: NtDuplicateObject
+EACOffset: 0x1FB360, ModuleOffset: 0x6FDBB0, Module: ntoskrnl.exe, Import: IoGetFileObjectGenericMapping
+EACOffset: 0x1FB350, ModuleOffset: 0x259AD0, Module: ntoskrnl.exe, Import: ExAcquirePushLockSharedEx
+EACOffset: 0x1FB330, ModuleOffset: 0x259910, Module: ntoskrnl.exe, Import: ExAcquirePushLockExclusiveEx
+EACOffset: 0x1FB320, ModuleOffset: 0x2BD690, Module: ntoskrnl.exe, Import: ExInitializePushLock
+EACOffset: 0x1FB310, ModuleOffset: 0x4110, Module: FLTMGR.SYS, Import: FltGetFileNameInformation
+EACOffset: 0x1FB300, ModuleOffset: 0x379D0, Module: FLTMGR.SYS, Import: FltParseFileNameInformation
+EACOffset: 0x1FB2F0, ModuleOffset: 0x257B40, Module: ntoskrnl.exe, Import: ExReleasePushLockSharedEx
+EACOffset: 0x1FB2E0, ModuleOffset: 0x3EBE0, Module: FLTMGR.SYS, Import: FltGetDestinationFileNameInformation
+EACOffset: 0x1FB2D0, ModuleOffset: 0x644410, Module: ntoskrnl.exe, Import: RtlMapGenericMask
+EACOffset: 0x1FB2C0, ModuleOffset: 0x6464E0, Module: ntoskrnl.exe, Import: NtMapViewOfSection
+EACOffset: 0x1FB2A0, ModuleOffset: 0x2E54B0, Module: ntoskrnl.exe, Import: RtlWalkFrameChain
+EACOffset: 0x1FB290, ModuleOffset: 0x2596A0, Module: ntoskrnl.exe, Import: ExReleasePushLockExclusiveEx
+EACOffset: 0x1FB280, ModuleOffset: 0x96B0, Module: FLTMGR.SYS, Import: FltIsDirectory
+EACOffset: 0x1FB260, ModuleOffset: 0x6FD090, Module: ntoskrnl.exe, Import: NtOpenDirectoryObject
+EACOffset: 0x1FB240, ModuleOffset: 0xCFC5A8, Module: ntoskrnl.exe, Import: IoDriverObjectType
+EACOffset: 0x1FB770, ModuleOffset: 0x234F50, Module: ntoskrnl.exe, Import: MmProbeAndLockPages
+EACOffset: 0x1FC910, ModuleOffset: 0x62D240, Module: ntoskrnl.exe, Import: NtCreateFile
+EACOffset: 0x1FC8C0, ModuleOffset: 0x91FB50, Module: ntoskrnl.exe, Import: SeUnregisterImageVerificationCallback
+EACOffset: 0x1FC650, ModuleOffset: 0x2F3650, Module: ntoskrnl.exe, Import: FsRtlNumberOfRunsInBaseMcb
+EACOffset: 0x1FC5F0, ModuleOffset: 0x343FC0, Module: ntoskrnl.exe, Import: MmCopyMemory
+EACOffset: 0x1FBB60, ModuleOffset: 0x640A80, Module: ntoskrnl.exe, Import: SeQueryInformationToken
+EACOffset: 0x1FBB40, ModuleOffset: 0x683B70, Module: ntoskrnl.exe, Import: IoQueryFileDosDeviceName
+EACOffset: 0x1FBB30, ModuleOffset: 0xD2E6B8, Module: ntoskrnl.exe, Import: SeExports
+EACOffset: 0x1FBAF0, ModuleOffset: 0x260F90, Module: ntoskrnl.exe, Import: RtlCopyUnicodeString
+EACOffset: 0x1FBDB0, ModuleOffset: 0x329A90, Module: ntoskrnl.exe, Import: KeInitializeMutex
+EACOffset: 0x1FB7C0, ModuleOffset: 0x75B870, Module: ntoskrnl.exe, Import: IoWMIOpenBlock
+EACOffset: 0x1FB740, ModuleOffset: 0x9B80B0, Module: ntoskrnl.exe, Import: ExFreePool
+EACOffset: 0x1FC7E0, ModuleOffset: 0x34DB50, Module: ntoskrnl.exe, Import: PsGetThreadProcessId
+EACOffset: 0x1FC7D0, ModuleOffset: 0x5FBA40, Module: ntoskrnl.exe, Import: NtQuerySystemInformation
+EACOffset: 0x1FC7B0, ModuleOffset: 0x688EE0, Module: ntoskrnl.exe, Import: PsLookupThreadByThreadId
+EACOffset: 0x1FC7A0, ModuleOffset: 0x21DD70, Module: ntoskrnl.exe, Import: KeQueryTimeIncrement
+EACOffset: 0x1FC770, ModuleOffset: 0x5156C0, Module: ntoskrnl.exe, Import: KeDeregisterNmiCallback
+EACOffset: 0x1FC750, ModuleOffset: 0x25A0C0, Module: ntoskrnl.exe, Import: ObDereferenceObject
+EACOffset: 0x1FC740, ModuleOffset: 0x514730, Module: ntoskrnl.exe, Import: KeRevertToUserAffinityThreadEx
+EACOffset: 0x1FC730, ModuleOffset: 0x689130, Module: ntoskrnl.exe, Import: PsLookupProcessByProcessId
+EACOffset: 0x1FC720, ModuleOffset: 0x20FA80, Module: ntoskrnl.exe, Import: KeDelayExecutionThread
+EACOffset: 0x1FC700, ModuleOffset: 0x3482C0, Module: ntoskrnl.exe, Import: PsGetThreadId
+EACOffset: 0x1FC6E0, ModuleOffset: 0x3CFAD0, Module: ntoskrnl.exe, Import: KeSetSystemAffinityThreadEx
+EACOffset: 0x1FC6D0, ModuleOffset: 0x207AE0, Module: ntoskrnl.exe, Import: KeGetCurrentProcessorNumberEx
+EACOffset: 0x1FC6C0, ModuleOffset: 0x22408, Module: ntoskrnl.exe, Import: MmSystemRangeStart
+EACOffset: 0x1FC6B0, ModuleOffset: 0x3F9D40, Module: ntoskrnl.exe, Import: ExfUnblockPushLock
+EACOffset: 0x1FB7B0, ModuleOffset: 0x7139A0, Module: ntoskrnl.exe, Import: ObGetObjectType
+EACOffset: 0x1FB700, ModuleOffset: 0x2BD6B0, Module: ntoskrnl.exe, Import: KeQuerySystemTimePrecise
+EACOffset: 0x1FB6E0, ModuleOffset: 0xC40788, Module: ntoskrnl.exe, Import: KdEnteredDebugger
+EACOffset: 0x1FB6D0, ModuleOffset: 0x724110, Module: ntoskrnl.exe, Import: PsResumeProcess
+EACOffset: 0x1FB6B0, ModuleOffset: 0x77DC40, Module: ntoskrnl.exe, Import: PsGetProcessExitStatus
+EACOffset: 0x1FB670, ModuleOffset: 0x252130, Module: ntoskrnl.exe, Import: ObDereferenceObjectDeferDelete
+EACOffset: 0x1FB650, ModuleOffset: 0x25A390, Module: ntoskrnl.exe, Import: ExReleaseResourceLite
+EACOffset: 0x1FB640, ModuleOffset: 0x260230, Module: ntoskrnl.exe, Import: KeEnterCriticalRegion
+EACOffset: 0x1FB630, ModuleOffset: 0x25A350, Module: ntoskrnl.exe, Import: KeLeaveCriticalRegion
+EACOffset: 0x1FB620, ModuleOffset: 0x25AB40, Module: ntoskrnl.exe, Import: ExAcquireResourceExclusiveLite
+EACOffset: 0x1FB5E0, ModuleOffset: 0x25F440, Module: ntoskrnl.exe, Import: IoGetStackLimits
+EACOffset: 0x1FB580, ModuleOffset: 0x2651E0, Module: ntoskrnl.exe, Import: KeStallExecutionProcessor
+EACOffset: 0x1FBAD0, ModuleOffset: 0x5829E0, Module: ntoskrnl.exe, Import: PsGetThreadCreateTime
+EACOffset: 0x1FBAB0, ModuleOffset: 0x46F00, Module: CI.dll, Import: CiFreePolicyInfo
+EACOffset: 0x1FBAA0, ModuleOffset: 0x564E0, Module: CI.dll, Import: CiValidateFileObject
+EACOffset: 0x1FBA90, ModuleOffset: 0x633360, Module: ntoskrnl.exe, Import: ObReferenceObjectByHandle
+EACOffset: 0x1FBA80, ModuleOffset: 0xCFC448, Module: ntoskrnl.exe, Import: IoFileObjectType
+EACOffset: 0x1FBA70, ModuleOffset: 0x3D16F0, Module: ntoskrnl.exe, Import: _vsnprintf
+EACOffset: 0x1FBA60, ModuleOffset: 0x2BD610, Module: ntoskrnl.exe, Import: KeInitializeApc
+EACOffset: 0x1FBA50, ModuleOffset: 0x2E1E30, Module: ntoskrnl.exe, Import: KeInsertQueueApc
+EACOffset: 0x1FBA20, ModuleOffset: 0x252190, Module: ntoskrnl.exe, Import: KeSetEvent
+EACOffset: 0x1FBA00, ModuleOffset: 0x71A770, Module: ntoskrnl.exe, Import: RtlWriteRegistryValue
+EACOffset: 0x1FB9F0, ModuleOffset: 0x7196F0, Module: ntoskrnl.exe, Import: NtFlushKey
+EACOffset: 0x1FB9E0, ModuleOffset: 0x784E00, Module: ntoskrnl.exe, Import: RtlDeleteRegistryValue
+EACOffset: 0x1FB9C0, ModuleOffset: 0x614240, Module: ntoskrnl.exe, Import: ObReferenceObjectByName
+EACOffset: 0x1FB9B0, ModuleOffset: 0x71BA90, Module: ntoskrnl.exe, Import: RtlUTF8ToUnicodeN
+EACOffset: 0x1FB9A0, ModuleOffset: 0x3478E0, Module: ntoskrnl.exe, Import: RtlTimeFieldsToTime
+EACOffset: 0x1FB990, ModuleOffset: 0x32EBE0, Module: ntoskrnl.exe, Import: KeShouldYieldProcessor
+EACOffset: 0x1FB980, ModuleOffset: 0x780230, Module: ntoskrnl.exe, Import: NtDeleteFile
+EACOffset: 0x1FB970, ModuleOffset: 0x5F77A0, Module: ntoskrnl.exe, Import: NtWriteFile
+EACOffset: 0x1FB960, ModuleOffset: 0x6F2E40, Module: ntoskrnl.exe, Import: NtQueryFullAttributesFile
+EACOffset: 0x1FB948, ModuleOffset: 0xC2A7C0, Module: ntoskrnl.exe, Import: PsLoadedModuleResource
+EACOffset: 0x1FB938, ModuleOffset: 0xC2A830, Module: ntoskrnl.exe, Import: PsLoadedModuleList
+EACOffset: 0x1FB920, ModuleOffset: 0x30EE70, Module: ntoskrnl.exe, Import: MmUnmapIoSpace
+EACOffset: 0x1FB910, ModuleOffset: 0x30D620, Module: ntoskrnl.exe, Import: MmMapIoSpace
+EACOffset: 0x1FB900, ModuleOffset: 0x25A1D0, Module: ntoskrnl.exe, Import: ObfReferenceObject
+EACOffset: 0x1FB8F0, ModuleOffset: 0x232120, Module: ntoskrnl.exe, Import: ExAcquireFastMutexUnsafe
+EACOffset: 0x1FB8E0, ModuleOffset: 0x2322B0, Module: ntoskrnl.exe, Import: ExReleaseFastMutexUnsafe
+EACOffset: 0x1FB8D0, ModuleOffset: 0x66D070, Module: ntoskrnl.exe, Import: RtlEqualUnicodeString
+EACOffset: 0x1FB8C0, ModuleOffset: 0x51B290, Module: ntoskrnl.exe, Import: KeSignalCallDpcSynchronize
+EACOffset: 0x1FB8B0, ModuleOffset: 0x3FE720, Module: ntoskrnl.exe, Import: KeBugCheckEx
+EACOffset: 0x1FB8A0, ModuleOffset: 0x232E60, Module: ntoskrnl.exe, Import: KeUnstackDetachProcess
+EACOffset: 0x1FB890, ModuleOffset: 0x2E4CE0, Module: ntoskrnl.exe, Import: RtlVirtualUnwind
+EACOffset: 0x1FB880, ModuleOffset: 0x2BEE40, Module: ntoskrnl.exe, Import: KeStackAttachProcess
+EACOffset: 0x1FB870, ModuleOffset: 0x336640, Module: ntoskrnl.exe, Import: ExReleaseSpinLockExclusive
+EACOffset: 0x1FB860, ModuleOffset: 0x362660, Module: ntoskrnl.exe, Import: KeSignalCallDpcDone
+EACOffset: 0x1FB840, ModuleOffset: 0x2E7F40, Module: ntoskrnl.exe, Import: RtlLookupFunctionEntry
+EACOffset: 0x1FB810, ModuleOffset: 0x2B49C0, Module: ntoskrnl.exe, Import: ExAcquireSpinLockExclusive
+EACOffset: 0x1FB800, ModuleOffset: 0x63FB00, Module: ntoskrnl.exe, Import: ObOpenObjectByName
+ 
+Import: 0x1FB240, Uses: 02 [0xC2B74, 0xDC2F3]
+Import: 0x1FB25A, Uses: 01 [0x7C7913 (vm)]
+Import: 0x1FB260, Uses: 01 [0xCD382]
+Import: 0x1FB270, Uses: 01 [0xFA93D1 (vm)]
+Import: 0x1FB280, Uses: 01 [0x9337E]
+Import: 0x1FB290, Uses: 05 [0x354AB, 0x92E2D, 0x93095, 0x936D8, 0x939A2]
+Import: 0x1FB2A0, Uses: 01 [0x92DD8]
+Import: 0x1FB2C0, Uses: 01 [0x40C4E]
+Import: 0x1FB2D0, Uses: 02 [0x93514, 0x937EF]
+Import: 0x1FB2E0, Uses: 01 [0x9345F]
+Import: 0x1FB2F0, Uses: 01 [0x931A2]
+Import: 0x1FB300, Uses: 02 [0x93337, 0x934B1]
+Import: 0x1FB310, Uses: 01 [0x932FF]
+Import: 0x1FB320, Uses: 01 [0x92EBC]
+Import: 0x1FB330, Uses: 06 [0x35469, 0x92C8A, 0x92FC9, 0x9368F, 0x93959, 0x10C9EA]
+Import: 0x1FB341, Uses: 01 [0xD8D348 (vm)]
+Import: 0x1FB350, Uses: 01 [0x9316D]
+Import: 0x1FB360, Uses: 02 [0x934EF, 0x937D3]
+Import: 0x1FB370, Uses: 01 [0xF8BBD8 (vm)]
+Import: 0x1FB380, Uses: 05 [0x1E9CB, 0x1F4FD, 0x68963, 0x9D59B, 0x9D80B]
+Import: 0x1FB390, Uses: 02 [0x1EDE0, 0x4FB27]
+Import: 0x1FB3A0, Uses: 01 [0x1F609]
+Import: 0x1FB3B0, Uses: 01 [0x1F3F2]
+Import: 0x1FB3C0, Uses: 02 [0x1F2D6, 0x4FDB8]
+Import: 0x1FB3CD, Uses: 01 [0x8E9149 (vm)]
+Import: 0x1FB3D0, Uses: 02 [0x1F1A8, 0xE93A1]
+Import: 0x1FB43A, Uses: 01 [0x510DFC (vm)]
+Import: 0x1FB580, Uses: 01 [0x11070F]
+Import: 0x1FB5E0, Uses: 01 [0x110425]
+Import: 0x1FB620, Uses: 01 [0xBF0F0]
+Import: 0x1FB630, Uses: 12 [0x354CF, 0x73090, 0x73268, 0x92E51, 0x930B9, 0x931ED, 0x936FE, 0x939C8, 0xBF2D2, 0xD0292, 0x10CA69, 0x287882 (vm)]
+Import: 0x1FB640, Uses: 12 [0x3544A, 0x72F80, 0x73142, 0x92C6B, 0x92FA6, 0x9314E, 0x93670, 0x9393A, 0xBF0C2, 0xD01C7, 0x10C9CB, 0xFD1CD7 (vm)]
+Import: 0x1FB650, Uses: 01 [0xBF28E]
+Import: 0x1FB670, Uses: 01 [0x94463]
+Import: 0x1FB680, Uses: 01 [0xC4F791 (vm)]
+Import: 0x1FB6B0, Uses: 01 [0xF7091]
+Import: 0x1FB6D0, Uses: 01 [0x9F12CC (vm)]
+Import: 0x1FB6E0, Uses: 01 [0x1105BF]
+Import: 0x1FB700, Uses: 02 [0xB553A9 (vm), 0x17BB806 (vm)]
+Import: 0x1FB740, Uses: 21 [0x2BBB1, 0x3C9AE, 0x6226B, 0x62686, 0x8918A, 0x9A3D4, 0xDCBEA, 0xDF919, 0xEE25A, 0xEE4C0, 0xEF545, 0xF48C7, 0xF4A58, 0xF4A8F, 0xF4ACD, 0x5A4EA7 (vm), 0x8CF90F (vm), 0x9BD7B4 (vm), 0xEF1830 (vm), 0xFA2D03 (vm), 0x16ABB60 (vm)]
+Import: 0x1FB770, Uses: 01 [0xB340A]
+Import: 0x1FB7B0, Uses: 04 [0x6FA59, 0xCD428, 0x114703, 0x4A64F9 (vm)]
+Import: 0x1FB7D0, Uses: 02 [0x2A044F (vm), 0xAA8CCB (vm)]
+Import: 0x1FB7F0, Uses: 02 [0x6FB03, 0x6FC76]
+Import: 0x1FB800, Uses: 01 [0x6FBE8]
+Import: 0x1FB810, Uses: 06 [0x6E188, 0x97E9C, 0xAC186, 0xAC2C7, 0x1052AF7 (vm), 0x13D46C9 (vm)]
+Import: 0x1FB840, Uses: 07 [0x23F29, 0x24034, 0x3FFEE, 0x40092, 0xAB069, 0xAB140, 0x1754C2E (vm)]
+Import: 0x1FB860, Uses: 02 [0x24B79, 0x3F66E]
+Import: 0x1FB870, Uses: 05 [0x6E419, 0x97EFD, 0xAC23C, 0xAC38A, 0xD6DEB3 (vm)]
+Import: 0x1FB880, Uses: 02 [0x5091C, 0x11B77D1 (vm)]
+Import: 0x1FB890, Uses: 02 [0x23FBB, 0x5DA432 (vm)]
+Import: 0x1FB8A0, Uses: 01 [0x1093F00 (vm)]
+Import: 0x1FB8A6, Uses: 01 [0x8376CC (vm)]
+Import: 0x1FB8B0, Uses: 04 [0x3E88B, 0x540AC, 0x99CDC, 0xDCD34]
+Import: 0x1FB8C0, Uses: 03 [0x24B20, 0x24B61, 0x3F646]
+Import: 0x1FB8D0, Uses: 02 [0x72FF0, 0x731AC]
+Import: 0x1FB8E0, Uses: 04 [0x7306A, 0x73242, 0xD026C, 0x124EB87 (vm)]
+Import: 0x1FB8EA, Uses: 01 [0x13D9EA1 (vm)]
+Import: 0x1FB8F0, Uses: 04 [0x72FA2, 0x73161, 0xD01F0, 0x32ACC8 (vm)]
+Import: 0x1FB900, Uses: 09 [0x380AA, 0x4EEA0, 0x88D30, 0x4C2B16 (vm), 0x4FD0D3 (vm), 0x7D9FB1 (vm), 0x116D65E (vm), 0x146B177 (vm), 0x167AE75 (vm)]
+Import: 0x1FB910, Uses: 03 [0x867DF, 0x8685B, 0x86902]
+Import: 0x1FB920, Uses: 08 [0x86816, 0x8689B, 0x86942, 0xB33A0, 0xDA3F1, 0xE7A0F, 0xE7F82, 0xD9D21E (vm)]
+Import: 0x1FB930, Uses: 01 [0xBF06A]
+Import: 0x1FB938, Uses: 03 [0xBF057, 0xBF12D, 0xBF16F]
+Import: 0x1FB948, Uses: 03 [0xBF08E, 0xBF0E1, 0xBF27F]
+Import: 0x1FB958, Uses: 03 [0xBF09E, 0xBF103, 0xBF2AE]
+Import: 0x1FB960, Uses: 03 [0x72DE4, 0xD3503, 0xEA711]
+Import: 0x1FB970, Uses: 01 [0xEB068]
+Import: 0x1FB980, Uses: 02 [0x72D3A, 0xEA632]
+Import: 0x1FB990, Uses: 01 [0xEB7AD]
+Import: 0x1FB9A0, Uses: 02 [0xEC31C, 0xEC45A]
+Import: 0x1FB9B0, Uses: 01 [0x3979D]
+Import: 0x1FB9C0, Uses: 02 [0xC2BD6, 0xDC31C]
+Import: 0x1FB9E0, Uses: 14 [0x48EF61 (vm), 0x4AE540 (vm), 0x54A25B (vm), 0x591A82 (vm), 0x648769 (vm), 0x6F7FD3 (vm), 0xB9C29B (vm), 0xE4BAAB (vm), 0x12C16D8 (vm), 0x12C2055 (vm), 0x139EFE3 (vm), 0x156DB20 (vm), 0x162F64B (vm), 0x17CB79E (vm)]
+Import: 0x1FB9F0, Uses: 01 [0xF4D3E]
+Import: 0x1FBA00, Uses: 06 [0xF7166, 0xF75E1, 0xF76A3, 0xF7883, 0x389CE9 (vm), 0x1405DA4 (vm)]
+Import: 0x1FBA20, Uses: 08 [0x579C7, 0x57A4B, 0x844C1, 0x845A9, 0x4481E9 (vm), 0x641C50 (vm), 0xEF139B (vm), 0x1797D55 (vm)]
+Import: 0x1FBA40, Uses: 01 [0x1761338 (vm)]
+Import: 0x1FBA50, Uses: 01 [0xC94DB2 (vm)]
+Import: 0x1FBA70, Uses: 01 [0x4CF81]
+Import: 0x1FBA7E, Uses: 01 [0xB3B1BC (vm)]
+Import: 0x1FBA80, Uses: 02 [0x1A2B5, 0x4A652E (vm)]
+Import: 0x1FBA90, Uses: 11 [0x1A2F9, 0x28676, 0x286FC, 0x3A95D, 0x5AC7B, 0x5B174, 0x5B288, 0x943FC, 0xBAF38, 0xCD3E5, 0x1318C51 (vm)]
+Import: 0x1FBAA0, Uses: 01 [0x1A353]
+Import: 0x1FBAB0, Uses: 02 [0x1A411, 0x1A435]
+Import: 0x1FBAD0, Uses: 01 [0xC30608 (vm)]
+Import: 0x1FBAF0, Uses: 01 [0xCC1CB]
+Import: 0x1FBB30, Uses: 12 [0xBE300, 0x29E90E (vm), 0x7381B9 (vm), 0xBF7F25 (vm), 0x10E8FE7 (vm), 0x1101CDD (vm), 0x1118693 (vm), 0x13C433B (vm), 0x14289FA (vm), 0x15D0F61 (vm), 0x15D0FCB (vm), 0x16DFDCA (vm)]
+Import: 0x1FBB40, Uses: 01 [0x3C951]
+Import: 0x1FBB60, Uses: 02 [0x3D6E3, 0xAFEC5C (vm)]
+Import: 0x1FBB70, Uses: 04 [0x3D70E, 0xE8E60E (vm), 0x11D543B (vm), 0x13F3D35 (vm)]
+Import: 0x1FBB80, Uses: 04 [0x3D6B9, 0x56BB01 (vm), 0xE92BAA (vm), 0x129A58C (vm)]
+Import: 0x1FBB90, Uses: 01 [0x626F8]
+Import: 0x1FBBA0, Uses: 01 [0x3E937]
+Import: 0x1FBBB0, Uses: 02 [0x3CA4A, 0x3CA7C]
+Import: 0x1FBBB1, Uses: 01 [0x2CF3E2 (vm)]
+Import: 0x1FBBC0, Uses: 04 [0x3CAD7, 0x9374F, 0x93785, 0x93A26]
+Import: 0x1FBBD0, Uses: 02 [0x3C7CE, 0x3C844]
+Import: 0x1FBBE0, Uses: 01 [0x3E910]
+Import: 0x1FBBF0, Uses: 05 [0x4F0D9, 0x4F162, 0x50BBD, 0x50CC8, 0x7BBD2]
+Import: 0x1FBC00, Uses: 01 [0x92CD7]
+Import: 0x1FBC10, Uses: 15 [0x3EFED, 0x72BB2, 0x72D05, 0x72DB9, 0x82160, 0x941A0, 0xD34C6, 0xD35AE, 0xDCC69, 0xEA601, 0xEA6E0, 0xEAA2C, 0xEABEB, 0xEAD8F, 0xEAFA2]
+Import: 0x1FBC20, Uses: 01 [0x3E8D8]
+Import: 0x1FBC30, Uses: 03 [0x4EAB8, 0x4F01E, 0xABE07]
+Import: 0x1FBC40, Uses: 02 [0x11A4990 (vm), 0x13092C4 (vm)]
+Import: 0x1FBC50, Uses: 01 [0x3C6C3]
+Import: 0x1FBC60, Uses: 01 [0xE7D7A0 (vm)]
+Import: 0x1FBC70, Uses: 01 [0x3C767]
+Import: 0x1FBC80, Uses: 01 [0x3CA22]
+Import: 0x1FBC90, Uses: 02 [0x4005F, 0xC90BF]
+Import: 0x1FBCC0, Uses: 07 [0x37CAA, 0x92D65, 0x92DB0, 0x932AD, 0xABDAD, 0x4BF7ED (vm), 0x12F9DEF (vm)]
+Import: 0x1FBCE0, Uses: 01 [0xB38FD]
+Import: 0x1FBD10, Uses: 01 [0x17582F2 (vm)]
+Import: 0x1FBD20, Uses: 02 [0xDC374, 0xDC3E1]
+Import: 0x1FBD30, Uses: 01 [0xDCCBC]
+Import: 0x1FBD40, Uses: 01 [0x10CA45]
+Import: 0x1FBD60, Uses: 01 [0xF3B9E5 (vm)]
+Import: 0x1FBD70, Uses: 01 [0xDC9B0]
+Import: 0x1FBD90, Uses: 48 [0xF18A, 0xF382, 0x12BC7, 0x57DB0, 0x57E47, 0x57EFD, 0x60A36, 0x60D32, 0x68A88, 0x7B033, 0x7B12E, 0x7B23D, 0x7B3B3, 0x7B4CA, 0x7B585, 0x83649, 0x8417C, 0x8448C, 0x8457F, 0x84660, 0x84742, 0x88CFB, 0x9A92B, 0xAC263, 0xAC3B1, 0xAC9F8, 0xBB75B, 0xBBD64, 0xBBED0, 0xBC017, 0xCC108, 0xCC1F9, 0xD3EA9, 0xD3FB1, 0xD408D, 0xD417B, 0xD4244, 0xD42B6, 0x10B9B4, 0x329EC9 (vm), 0x4D4061 (vm), 0x7FE28D (vm), 0x80A760 (vm), 0xD2D91A (vm), 0x11AF5F7 (vm), 0x14BB7FC (vm), 0x14F294B (vm), 0x1797CFB (vm)]
+Import: 0x1FBDA0, Uses: 09 [0xF246, 0xF410, 0xF4C3, 0x25465, 0x2693F, 0x26BA9, 0x988EF, 0x2EF95F (vm), 0x6E6C36 (vm)]
+Import: 0x1FBDB0, Uses: 01 [0x97ECF]
+Import: 0x1FBDC0, Uses: 03 [0xF1B3, 0x97FA8, 0x98B10]
+Import: 0x1FBDD0, Uses: 52 [0xF132, 0xF293, 0x12B79, 0x57D6C, 0x57E05, 0x57EAB, 0x60993, 0x60CCD, 0x689EB, 0x7AFBE, 0x7B0CF, 0x7B1F7, 0x7B36E, 0x7B46A, 0x7B52A, 0x8413F, 0x8432A, 0x8453D, 0x84606, 0x846C6, 0x88C60, 0x9A8D0, 0xAC1AE, 0xAC2EF, 0xAC959, 0xBB725, 0xBBCFA, 0xBBDA8, 0xBBF15, 0xCC08C, 0xCC163, 0xD3E5C, 0xD3F64, 0xD402D, 0xD410E, 0xD41E6, 0xD4282, 0x10B98E, 0x31F34F (vm), 0x4A868C (vm), 0x6C22AC (vm), 0x7A5DA3 (vm), 0x8B497E (vm), 0xC0027D (vm), 0xC698E9 (vm), 0xEDBFAA (vm), 0x1185D0D (vm), 0x137EE71 (vm), 0x1524975 (vm), 0x154AAA0 (vm), 0x158DA60 (vm), 0x17CFB7E (vm)]
+Import: 0x1FBDE0, Uses: 09 [0xF047, 0x57A01, 0x975CD, 0x97F26, 0x98562, 0xDCD98, 0x10B9F5, 0xA1A081 (vm), 0xC46FA9 (vm)]
+Import: 0x1FBDF0, Uses: 06 [0xF0A6, 0xF2EB, 0x98739, 0x4A6867 (vm), 0x6AB93F (vm), 0x14082E1 (vm)]
+Import: 0x1FBE00, Uses: 10 [0x57D0E, 0x57D4E, 0x6092F, 0x7AE95, 0x7B5D5, 0x83E71, 0xAC042, 0xBB6CC, 0xD3787, 0xDCC93]
+Import: 0x1FBE10, Uses: 19 [0x5CA85, 0x5CB9F, 0x688BE, 0x68B11, 0x68B33, 0x68B56, 0x68E3F, 0x9D575, 0x9D7E5, 0xBC405, 0xE5623, 0xF9CE9, 0xF9D0B, 0xD2C1D4 (vm), 0xDB91C3 (vm), 0xF6DF2D (vm), 0x158945E (vm), 0x1690525 (vm), 0x17696F9 (vm)]
+Import: 0x1FBE50, Uses: 01 [0xBAEDC]
+Import: 0x1FBE60, Uses: 02 [0x2B8BF, 0x2B96D]
+Import: 0x1FBE70, Uses: 03 [0x2BB6D, 0x9A2DD, 0x128B578 (vm)]
+Import: 0x1FBE80, Uses: 04 [0x2BA31, 0x3F029, 0x62361, 0xEAA56]
+Import: 0x1FBE90, Uses: 03 [0x2BAC0, 0x6205E, 0xEAAD9]
+Import: 0x1FBEA0, Uses: 07 [0x5AC5C, 0x5AD41, 0x5AEE4, 0x5B158, 0x5B26C, 0xA8381B (vm), 0xD46495 (vm)]
+Import: 0x1FBEB0, Uses: 01 [0x4A4D58 (vm)]
+Import: 0x1FBEC0, Uses: 01 [0x5AA1A]
+Import: 0x1FBED0, Uses: 01 [0x5A7FB]
+Import: 0x1FBEE0, Uses: 01 [0x5A8DE]
+Import: 0x1FBEF0, Uses: 01 [0x5AA9A]
+Import: 0x1FBF00, Uses: 03 [0x5A6D3, 0x5ADB3, 0x5AF54]
+Import: 0x1FBF30, Uses: 01 [0x1666AA5 (vm)]
+Import: 0x1FBF50, Uses: 03 [0x11A91, 0x1D38E, 0xD90C6B (vm)]
+Import: 0x1FBF60, Uses: 01 [0x11ED5]
+Import: 0x1FBF70, Uses: 09 [0x11CDC, 0x11CFF, 0x12127, 0x1CA40, 0x1D47A, 0x4C3F5, 0xFBF3D, 0x3887D5 (vm), 0xFDF510 (vm)]
+Import: 0x1FBF80, Uses: 01 [0x11C06]
+Import: 0x1FBF90, Uses: 02 [0x11C5C, 0xF5F144 (vm)]
+Import: 0x1FBFB0, Uses: 06 [0x118A4, 0x119A0, 0x11E5A, 0x1C9DA, 0x321A50 (vm), 0xB036D0 (vm)]
+Import: 0x1FBFC0, Uses: 03 [0x11A56, 0x1CC54, 0xFBF58]
+Import: 0x1FBFE0, Uses: 04 [0x11D22, 0x1D451, 0x4C42D, 0x1431D0C (vm)]
+Import: 0x1FC010, Uses: 01 [0x11F80]
+Import: 0x1FC020, Uses: 02 [0x11FF2, 0x12072]
+Import: 0x1FC030, Uses: 03 [0x11CA7, 0x120FB, 0x1677EA8 (vm)]
+Import: 0x1FC03F, Uses: 04 [0xCDC8D6 (vm), 0xEFB2D4 (vm), 0x13E24C3 (vm), 0x14557C7 (vm)]
+Import: 0x1FC040, Uses: 02 [0x11A09, 0x1CA69]
+Import: 0x1FC050, Uses: 08 [0x117D4, 0x11B58, 0x11DF6, 0x1C62C, 0x1C81C, 0x1C8F8, 0x57054B (vm), 0x16E9A09 (vm)]
+Import: 0x1FC060, Uses: 04 [0x1F8D9, 0x2CFFE, 0x7D550, 0x88528]
+Import: 0x1FC070, Uses: 02 [0xCB078E (vm), 0xFA3815 (vm)]
+Import: 0x1FC0A0, Uses: 02 [0x31B4C, 0x5E1DB]
+Import: 0x1FC0B0, Uses: 01 [0x31F98]
+Import: 0x1FC0C0, Uses: 03 [0x31B96, 0x5EB93, 0xCC234]
+Import: 0x1FC0D0, Uses: 02 [0x322A5, 0x322E7]
+Import: 0x1FC0E0, Uses: 01 [0x13393]
+Import: 0x1FC0F0, Uses: 01 [0x5C572]
+Import: 0x1FC100, Uses: 02 [0x3EEB22 (vm), 0x854350 (vm)]
+Import: 0x1FC120, Uses: 01 [0x34B0F]
+Import: 0x1FC130, Uses: 02 [0x34B72, 0x62CF0C (vm)]
+Import: 0x1FC140, Uses: 01 [0x34A37]
+Import: 0x1FC150, Uses: 01 [0x152C948 (vm)]
+Import: 0x1FC156, Uses: 01 [0x16BEE11 (vm)]
+Import: 0x1FC160, Uses: 01 [0x3495C]
+Import: 0x1FC170, Uses: 01 [0x34A81]
+Import: 0x1FC180, Uses: 01 [0x349C3]
+Import: 0x1FC190, Uses: 01 [0x13191F4 (vm)]
+Import: 0x1FC1A0, Uses: 14 [0x91359, 0x987DA, 0x9DDCD, 0x9DF5D, 0x9E145, 0x9E349, 0xB333E, 0xE7F42, 0x598D34 (vm), 0x9B377F (vm), 0xAA755D (vm), 0xDF12DE (vm), 0x13F9732 (vm), 0x14535AF (vm)]
+Import: 0x1FC1C0, Uses: 04 [0xE51BF, 0xE5354, 0xF4CDD, 0x1003DBF (vm)]
+Import: 0x1FC1D0, Uses: 02 [0x144FE, 0xA2F8E0 (vm)]
+Import: 0x1FC1E0, Uses: 03 [0x14384, 0x1452E, 0x17E4B5E (vm)]
+Import: 0x1FC1F0, Uses: 01 [0x143D8]
+Import: 0x1FC200, Uses: 09 [0x14284, 0x264EBF (vm), 0x2EA51D (vm), 0x4AFDBB (vm), 0xC29BEE (vm), 0xCF52DB (vm), 0xF92726 (vm), 0x10CEF4E (vm), 0x146B3D8 (vm)]
+Import: 0x1FC210, Uses: 03 [0x144C4, 0x6C41DD (vm), 0xFC5600 (vm)]
+Import: 0x1FC220, Uses: 02 [0x885B7, 0x885EC]
+Import: 0x1FC250, Uses: 01 [0x130DE7B (vm)]
+Import: 0x1FC260, Uses: 07 [0x4F38D, 0x4F640, 0x6FA7B, 0x114725, 0x65F1BC (vm), 0xE7AC51 (vm), 0x14FB16E (vm)]
+Import: 0x1FC280, Uses: 01 [0x4EC85]
+Import: 0x1FC2A0, Uses: 01 [0x5D91BB (vm)]
+Import: 0x1FC2B0, Uses: 01 [0x4EFDC]
+Import: 0x1FC2C0, Uses: 01 [0x6D7B87 (vm)]
+Import: 0x1FC2E0, Uses: 01 [0x7E4BEB (vm)]
+Import: 0x1FC2F0, Uses: 01 [0x4E576]
+Import: 0x1FC310, Uses: 01 [0xDA2CFC (vm)]
+Import: 0x1FC320, Uses: 02 [0x4E5D8, 0x6A416]
+Import: 0x1FC330, Uses: 02 [0x50C19, 0xAF785B (vm)]
+Import: 0x1FC340, Uses: 03 [0x4E6F9, 0x9431C, 0x9443A]
+Import: 0x1FC350, Uses: 02 [0x4F481, 0x1590E13 (vm)]
+Import: 0x1FC370, Uses: 02 [0x4E51E, 0x5062F]
+Import: 0x1FC380, Uses: 03 [0x4E7A1, 0xF70F7, 0x115592A (vm)]
+Import: 0x1FC390, Uses: 02 [0x4E636, 0xBAFF5]
+Import: 0x1FC3A0, Uses: 01 [0x4E6AA]
+Import: 0x1FC3B0, Uses: 03 [0x4ECED, 0x16000A5 (vm), 0x1627BA2 (vm)]
+Import: 0x1FC3C0, Uses: 01 [0x1062AEC (vm)]
+Import: 0x1FC3F0, Uses: 01 [0x4B12B2 (vm)]
+Import: 0x1FC400, Uses: 01 [0x508F6]
+Import: 0x1FC410, Uses: 02 [0x4E819, 0x4ECB9]
+Import: 0x1FC420, Uses: 01 [0x9FAA84 (vm)]
+Import: 0x1FC430, Uses: 03 [0x5407D, 0x5C534, 0x5C551]
+Import: 0x1FC440, Uses: 02 [0xA77DC, 0x76934C (vm)]
+Import: 0x1FC450, Uses: 02 [0x5404A, 0x5C594]
+Import: 0x1FC460, Uses: 03 [0xB3695, 0xBCF66, 0x7F18D4 (vm)]
+Import: 0x1FC470, Uses: 03 [0x28647, 0x286D7, 0x3A937]
+Import: 0x1FC480, Uses: 01 [0x2817A]
+Import: 0x1FC490, Uses: 02 [0x2878E, 0x17CE934 (vm)]
+Import: 0x1FC4B0, Uses: 01 [0x2752B]
+Import: 0x1FC4C0, Uses: 03 [0x281A4, 0x281F0, 0x3A8E0]
+Import: 0x1FC4F0, Uses: 01 [0x89246]
+Import: 0x1FC500, Uses: 01 [0x11D0082 (vm)]
+Import: 0x1FC510, Uses: 01 [0x4BCDA5 (vm)]
+Import: 0x1FC520, Uses: 01 [0x2CF142 (vm)]
+Import: 0x1FC540, Uses: 09 [0x96FC, 0x6FCE8, 0x36B708 (vm), 0x5DE692 (vm), 0x9E2F33 (vm), 0xBE2374 (vm), 0xE566E8 (vm), 0xEFBEA5 (vm), 0xF4494B (vm)]
+Import: 0x1FC550, Uses: 10 [0x8D8A, 0x9799, 0xF994F, 0x109EF4, 0x25C252 (vm), 0x7501D9 (vm), 0x9A8365 (vm), 0x9DEF0F (vm), 0xE48239 (vm), 0x14C295C (vm)]
+Import: 0x1FC560, Uses: 06 [0x8816, 0x4F3A9, 0x4F661, 0x5AD5D, 0x5AF00, 0xA2E37C (vm)]
+Import: 0x1FC570, Uses: 04 [0x8865, 0x88EA, 0xE5224, 0x6038B8 (vm)]
+Import: 0x1FC580, Uses: 03 [0x8D3A, 0xA004, 0x5A756]
+Import: 0x1FC5A0, Uses: 36 [0x86EA, 0x8967, 0x25508, 0x3719E, 0x3C62C, 0x3C8D2, 0x4F1E4, 0x4F412, 0x4FB8A, 0x4FE11, 0x5066D, 0x50D28, 0x5AE0D, 0x5AFAB, 0x62444, 0x62650, 0x6FD68, 0x73209, 0x89384, 0x89E5F, 0x8B134, 0xBAF88, 0xCD483, 0xD3695, 0xE52B5, 0xEACC9, 0xEAE6D, 0xEB0DA, 0xF4D7F, 0x103795, 0x641323 (vm), 0xA9E979 (vm), 0xCF9FFE (vm), 0xE9A559 (vm), 0xF2BC54 (vm), 0x1004E13 (vm)]
+Import: 0x1FC5B0, Uses: 36 [0xA1B9, 0x1EF5E, 0x1F0A6, 0x4EBA2, 0x4F5D5, 0x5129A, 0x6A317, 0x8758A, 0x87651, 0x87751, 0xABDD3, 0xAC937, 0xACD34, 0xD3F05, 0xDB9D9, 0x10A727, 0x11179A, 0x4637C3 (vm), 0x7241F4 (vm), 0x7BB8EC (vm), 0xA529FB (vm), 0xAFE893 (vm), 0xB83470 (vm), 0xDF2E35 (vm), 0xE877CF (vm), 0xF13AD3 (vm), 0x10B2275 (vm), 0x1231B50 (vm), 0x1315777 (vm), 0x144E33F (vm), 0x14571AD (vm), 0x148FFA2 (vm), 0x14FC669 (vm), 0x150B8A5 (vm), 0x15BE116 (vm), 0x169847B (vm)]
+Import: 0x1FC5C0, Uses: 50 [0x938E, 0xA16D, 0xA1A1, 0x1F739, 0x3808B, 0x4E7E4, 0x4F5B4, 0x508C6, 0x50944, 0x5C9B2, 0x5CAE2, 0x5CC1E, 0x5CCDA, 0x93CCB, 0x93CF0, 0x98022, 0x98233, 0x98B6D, 0xBC10F, 0xBC254, 0xBC374, 0xBC53E, 0xBC571, 0xDB9BA, 0xE95E7, 0xF7051, 0xFB1DB, 0x102B44, 0x10A6AE, 0x10A70F, 0x29DA7E (vm), 0x2C140C (vm), 0x3525F8 (vm), 0x37D0F1 (vm), 0x462FD6 (vm), 0x64E7D2 (vm), 0x7353FF (vm), 0x7435B4 (vm), 0x7B08C6 (vm), 0xAF1287 (vm), 0xCDE596 (vm), 0xDE44FD (vm), 0x10BC9DE (vm), 0x11F7A34 (vm), 0x136421E (vm), 0x13F71EC (vm), 0x1643D8C (vm), 0x1698447 (vm), 0x17F7DB7 (vm), 0x1838048 (vm)]
+Import: 0x1FC5D0, Uses: 02 [0x8756, 0xA041]
+Import: 0x1FC5F0, Uses: 04 [0xB322D, 0xB3620, 0xD4310, 0xDF3A16 (vm)]
+Import: 0x1FC650, Uses: 02 [0x89217, 0x1814F8F (vm)]
+Import: 0x1FC660, Uses: 02 [0x5AB14, 0xD00D8]
+Import: 0x1FC6AE, Uses: 01 [0xD584F8 (vm)]
+Import: 0x1FC6B0, Uses: 01 [0x28C42]
+Import: 0x1FC6C0, Uses: 13 [0x3942E, 0x3BDA1, 0x3CF58, 0xA78B8, 0xB149E, 0xB32AE, 0xB359D, 0xBBC67, 0xE565D, 0x2F15E2 (vm), 0x541511 (vm), 0xB4375A (vm), 0xCD1D36 (vm)]
+Import: 0x1FC6D0, Uses: 04 [0x2D7FCF (vm), 0x743562 (vm), 0xAF9993 (vm), 0xEF3112 (vm)]
+Import: 0x1FC6E0, Uses: 01 [0x112A5A]
+Import: 0x1FC700, Uses: 06 [0x5B1BB, 0xABAC1, 0x271B93 (vm), 0x4DBCFA (vm), 0x7435F6 (vm), 0x16DCD37 (vm)]
+Import: 0x1FC720, Uses: 02 [0x3C3D2, 0x55CAE]
+Import: 0x1FC730, Uses: 20 [0x3A85D, 0x3CD39, 0x3E44A, 0x4E65B, 0x4EF5C, 0x4F611, 0x4F73A, 0x4F856, 0x4F967, 0x7058C, 0x875AC, 0x87773, 0xDBD46, 0x108301, 0x2350B3 (vm), 0x25BABC (vm), 0x54B8E0 (vm), 0x62BDB4 (vm), 0xF0B8A3 (vm), 0x16BE9C8 (vm)]
+Import: 0x1FC740, Uses: 01 [0x112A9C]
+Import: 0x1FC750, Uses: 72 [0x1A3B3, 0x2629E, 0x2807D, 0x2873E, 0x287F8, 0x2881F, 0x38121, 0x3A8B0, 0x3A9BF, 0x3AA02, 0x3CD78, 0x3E500, 0x4E743, 0x4EEDE, 0x4EF96, 0x4F4C1, 0x4F6B4, 0x4F7C8, 0x4F8E4, 0x4F9E4, 0x5ACDA, 0x5AFE3, 0x5B1E5, 0x5B2D8, 0x6185F, 0x69D13, 0x6CC64, 0x821B7, 0x875E4, 0x876DB, 0x877A6, 0x88BEE, 0xA64F1, 0xABAEF, 0xBB0C2, 0xCD44E, 0xD3128, 0xD314E, 0xD3174, 0xD3197, 0xDBD9F, 0xDC41B, 0xDC455, 0xDE0A1, 0xDF8EA, 0xF9B79, 0x10837F, 0x5247F4 (vm), 0x586837 (vm), 0x9861A2 (vm), 0x991DA4 (vm), 0xA4B2A7 (vm), 0xB84BD6 (vm), 0xBAF568 (vm), 0xBD38F6 (vm), 0xD5036E (vm), 0xDBE402 (vm), 0xE47EF6 (vm), 0xE63186 (vm), 0xF86935 (vm), 0xFBAD4E (vm), 0x1074EEA (vm), 0x1103018 (vm), 0x111D985 (vm), 0x128D742 (vm), 0x1431A79 (vm), 0x148F41D (vm), 0x15AEF74 (vm), 0x16949BB (vm), 0x175D482 (vm), 0x1787B6F (vm), 0x17C6ADA (vm)]
+Import: 0x1FC770, Uses: 01 [0x97895]
+Import: 0x1FC7A0, Uses: 06 [0x3C417, 0x84239, 0x4283CC (vm), 0xE40E86 (vm), 0x123AAC1 (vm), 0x1413144 (vm)]
+Import: 0x1FC7B0, Uses: 17 [0x4EE45, 0x5AE90, 0x69CD9, 0xF99BD, 0x31302F (vm), 0x5D0D10 (vm), 0x78D55E (vm), 0x7ED788 (vm), 0x802B27 (vm), 0x81AFB9 (vm), 0x916859 (vm), 0x1098098 (vm), 0x127173B (vm), 0x141C2C0 (vm), 0x166B364 (vm), 0x16DE90D (vm), 0x171EF7C (vm)]
+Import: 0x1FC7D0, Uses: 05 [0x15110, 0x15184, 0x60431, 0xE806F1 (vm), 0x1126C06 (vm)]
+Import: 0x1FC7E0, Uses: 02 [0x5A863, 0x3C4275 (vm)]
+Import: 0x1FC810, Uses: 01 [0xB6ABB7 (vm)]
+Import: 0x1FC880, Uses: 01 [0x12C2EA0 (vm)]
+Import: 0x1FC8B0, Uses: 02 [0x29AC3, 0x29B23]
+Import: 0x1FC8C0, Uses: 01 [0x29AF3]
+Import: 0x1FC900, Uses: 01 [0x11D6B71 (vm)]
+Import: 0x1FC910, Uses: 09 [0xBCBB, 0x72E4D, 0x894BD, 0xD35EB, 0xEA908, 0xEAC1F, 0xEADC3, 0xEAFD6, 0x7C00E0 (vm)]
+Import: 0x1FC940, Uses: 09 [0xC615, 0x23EA2, 0x3497E, 0x6A3A8, 0x90E35, 0xE9611, 0x3B1063 (vm), 0x8D52BA (vm), 0x13E9AA0 (vm)]
+Pool Tag Randomization
+
+Found the decrypted pool tag table at runtime. 46 legitimate Windows tags:
+
+Code:
+ClfC ClfI ClfO Clfs    // Common Log File System
+CM11 CM13 CM16 CM17    // Configuration Manager
+CM20 CM25 CM26 CM27
+CM28 CM29 CM31 CM32
+CMAl CMCa CMSb CMSc
+Cont Dcdd Devi         // Device Manager
+EtwB                   // ETW
+UdMI Uref UsbC         // USB
+WDIs Wdog WfpC WfpS    // WFP/Watchdog
+ViMm Nhfs              // Memory Manager
+Ntf0 NtFB NtFf NtFL    // NTFS
+Obtb PcSi Uswd         // Object Manager
+Plcl ScCB              // Session Manager
+SmBf SmMm SmMs         // Storage
+The PRNG for selection uses MSVC CRT parameters (mult=214013, add=2531011) seeded from RDTSC, then XorShift on top. Located at sub_FFFFF802513AF2CC (in my build).
+
+
+Detection Mechanisms
+
+I found several detection systems working together.
+
+
+Memory Scanning (sub_FFFFF802513A7174)
+
+Page-by-page memory scanner with validation:
+
+Code:
+uint64_t scan_memory(uint64_t addr, size_t size, void* output) {
+    uint64_t page_base = addr & ~0xFFF;
+    uint32_t pages = (size + 0xFFF) >> 12;
+ 
+    for (uint32_t i = 0; i < pages; i++) {
+        if (MmIsAddressValid(page_base + (i << 12))) {
+            void* mapped = map_physical_page(...);
+            memcpy(output, mapped + offset, copy_size);
+            unmap_page(mapped);
+        }
+    }
+    return bytes_copied;
+}
+
+Page Table Walking (sub_FFFFF802513E6768)
+
+This one's interesting. They bypass standard APIs entirely and walk page tables directly:
+
+Code:
+bool walk_page_tables(uint64_t virt_addr, uint64_t* phys_out, uint64_t* flags_out) {
+    uint64_t cr3 = __readcr3();
+ 
+    // PML4 -> PDPT -> PD -> PT
+    if (read_physical((cr3 & 0xFFFFFFFFF000) + ((virt_addr >> 36) & 0xFF8), 8, &pml4e) == 8
+        && (pml4e & 1)) {  // Present bit
+ 
+        if (read_physical((pml4e & 0xFFFFFFFFF000) + ((virt_addr >> 27) & 0xFF8), 8, &pdpte) == 8
+            && (pdpte & 1)) {
+ 
+            // Handle 1GB/2MB large pages via PS bit
+            // Continue to PT level for 4KB pages
+            // ...
+        }
+    }
+ 
+    *phys_out = physical_address;
+    *flags_out = combined_flags;  // NX, Write, User
+    return success;
+}
+This catches hidden memory that MmIsAddressValid wouldn't see. If your page tables show something that the API says doesn't exist, you're flagged.
+
+
+Module Hash Verification (sub_FFFFF802513BD87C)
+
+SHA-1 hashing of driver code sections:
+
+Code:
+// Standard SHA-1 IVs
+sha1_state[0] = 0x67452301;
+sha1_state[1] = 0xEFCDAB89;
+sha1_state[2] = 0x98BADCFE;
+sha1_state[3] = 0x10325476;
+sha1_state[4] = 0xC3D2E1F0;
+ 
+// Hash stored at:
+// xmmword_FFFFF80251531500 (first 16 bytes)
+// dword_FFFFF80251531510 (last 4 bytes)
+ 
+// Result type marker: 748112251 (0x2C97497B)
+If your driver's hash doesn't match what they expect, or if code sections have been patched, this catches it.
+
+
+Section Permission Validation (sub_FFFFF802513B2EDC)
+
+Parses PE headers and checks section characteristics:
+Code sections (.text) made writable - flagged
+Data sections made executable - flagged
+Missing or modified section headers - flagged
+
+
+Path/String Blacklist (sub_FFFFF802513BCC80)
+
+Multiple encrypted blacklist tables, each with different encryption. Got the keys from disassembly:
+
+Code:
+Address              | Size | Key (Hex)  | Algorithm
+---------------------|------|------------|--------------------------------
+0xFFFFF802514B8BD8   | 30   | 0x022AA75D | XORshift + ROR2
+0xFFFFF802514B8BA8   | 20   | 0xCE55744B | LCG: ~(k*0x41C64E6D + 0x3039)
+0xFFFFF802514B8B78   | 22   | 0x779ADA19 | XORshift + ROR1
+0xFFFFF802514B8B90   | 22   | 0x122D2040 | LCG: 0xFFFFCFC7 - k*0x41C64E6D
+0xFFFFF802514B8B60   | 20   | 0x838537BF | XORshift + ROL4 (pre-evolve)
+Decrypted all five patterns. Here's what came out:
+
+Code:
+P1: 5da72a02d22a8963cd369666dfc65eaa7c5e28918e7cb7f17c1115a7c53b
+P2: d7712c1f0fd5588ca70b66939ff791bbf7412ddb
+P3: 19da9a775e31c6db92671c93569222f107c5331473bd
+P4: 40202d12b3944c514c7044565fd7e443387d9309db6e
+P5: 685ca6b2e1f544c436ed45364b02d578b8b4d6db
+The encrypted data in the binary is stored as hex-encoded bytes in UTF-16LE with null padding. When you decode the hex before XOR, you get weird pair-swapped sequences like `CBEDGFIHKJ` (P5) which unswaps to `BCDEFGHIJK` - literally sequential ASCII 0x42-0x4B.
+
+The comparison function (sub_FFFFF80251391D38) does case-insensitive wide-string matching with `| 0x20`, but since the decrypted output is binary garbage (0xA75D, 0x022A, etc.), this is matching against binary data interpreted as UTF-16LE, not human-readable paths.
+
+My best guess: these are PE header signatures, code fingerprints, or embedded watermarks from known cheat tools, not filename/path blacklists like I originally assumed (correct me if I'm wrong). The actual path blacklist might be elsewhere, or this version uses hash-based detection instead. Most likely the former.
+
+
+Embedded File Detection (sub_FFFFF802513BD690)
+
+Scans memory for hidden files, specifically:
+
+Code:
+// PNG detection
+if (*ptr == 0xA1A0A0D474E5089) {  // PNG magic
+    if (*(ptr + 8) == 0x524448490D000000) {  // IHDR
+        // Search for IEND chunk
+        // If found: result->type = 2 (PNG detected)
+    }
+}
+ 
+// FAT/sector structure detection
+if (*ptr == 0x10000 && /* sector table valid */) {
+    // result->type = 3 (embedded filesystem)
+}
+I'm not sure what this is for or why they do it, I'd like if someone could give clarification, my assumption is that this is targeting overlay cheats that embed images in memory.
+
+
+Process Context Extraction (sub_FFFFF8025141FB08)
+
+Attaches to processes to extract context:
+
+Code:
+bool validate_process(PEPROCESS process, void* ctx_out) {
+    PEPROCESS current = PsGetCurrentProcess();
+ 
+    if (current == process) {
+        *(ctx_out + 32) = 1;  // Self-access marker
+        return true;
+    }
+ 
+    if (KeStackAttachProcess(process) >= 0) {
+        copy_process_context(process, ctx_out);
+        KeUnstackDetachProcess();
+        return true;
+    }
+    return false;
+}
+
+What Gets You Flagged
+
+Based on the detection functions I saw:
+
+Immediate Detection:
+Path/name matches blacklist substring
+Driver code hash mismatch (patches, hooks)
+Embedded PNG/files in process memory
+Hidden memory (page table vs API mismatch)
+Writable code sections or executable data sections
+
+Suspicious/Logged:
+Non-standard PE section names
+Unusual process context patterns
+Cross-process memory access patterns
+Registry access to sensitive keys
+
+This is just SOME of the things that get you flagged, there is more I just need to keep reversing.
+
+WinTrust Integration
+
+Found certificate validation GUIDs in .data:
+
+Code:
+0xfffff802514bc1d0: {F750E6C3-38EE-11D1-85E5-00C04FC295EE}
+                    // WINTRUST_ACTION_GENERIC_VERIFY_V2
+They're validating Authenticode signatures on drivers/processes. No certificate pinning detected though - uses standard CA validation.
+
+
+Still Looking Into
+
+A few things I haven't fully mapped yet:
+Object callbacks - I know they're using ObRegisterCallbacks somewhere, haven't traced it
+Minifilter callbacks - FltRegisterFilter is one of two static imports, need to map what IRPs they're filtering
+Kernel->User communication - Haven't reversed the IPC mechanism yet
+Telemetry payload structure - Know they collect timestamps and device info, don't have the exact format
+
+I'm still going through it, just takes time. All of these will come from manually stepping through or emulating the driver completely, which both are feasible.
+
+Summary
+Different builds have different crypto parameters - don't assume values are universal
+Page table walking catches hidden memory that API hooks miss
+SHA-1 integrity checking on module code sections
+Embedded file detection targets overlay cheats
+Blacklist is encrypted per-table with different algorithms, zeroed after use
+Section permission changes are checked via PE parsing
+35MB virtualized section at runtime (up from 21MB static)
+
+The IRQL bypass from static analysis should still work for the memory scanning functions - they still check cr8 before proceeding. But the page table walking and hash verification happen regardless.
+
+I'll be debugging the driver at runtime right after I post this and updating this post with new information as I find it. If anyone has anything to add that would be amazing.
+Last edited by Helzky; 2nd January 2026 at 08:42 PM. Reason: imports clarification

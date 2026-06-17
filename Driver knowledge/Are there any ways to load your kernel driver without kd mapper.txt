@@ -1,0 +1,203 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+Anti-Cheat Software & Programming
+Anti-Cheat Bypass
+Reload this Page [Help] Are there any ways to load your kernel driver without kdmapper?
+advertisements
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 15
+Threads Started: 5
+Reputation: 164
+Last Login: Yesterday at 02:46 PM
+Your Notifications: 1 
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+Are there any ways to load your kernel driver without kdmapper?
+Old 11th May 2026, 04:43 AM	  #1
+Seari7
+n00bie
+
+
+Seari7's Avatar
+
+Join Date: Nov 2025
+Posts: 3
+Reputation: 10
+Rep Power: 15
+Seari7 has made posts that are generally average in quality
+Points: 413, Level: 1
+Points: 413, Level: 1	Points: 413, Level: 1	Points: 413, Level: 1
+Level up: 3%, 487 Points needed
+Level up: 3%	Level up: 3%	Level up: 3%
+Activity: 2.1%
+Activity: 2.1%	Activity: 2.1%	Activity: 2.1%
+Post Are there any ways to load your kernel driver without kdmapper?
+Hello everyone, I would like to ask about how to load my driver into the system to bypass anti-cheats. I know that there is kdmapper, but is it worth writing my own driver similar to kdmapper, or should I just try to rewrite the existing kdmapper?
+Seari7 is offline
+Last Active: 27th May 2026
+
+Add to Seari7's Reputation Take from Seari7's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 12th May 2026, 04:04 AM	  #2
+a1962688586
+n00bie
+
+
+a1962688586's Avatar
+
+Join Date: Oct 2016
+Posts: 8
+Reputation: 10
+Rep Power: 236
+a1962688586 has made posts that are generally average in quality
+Points: 7,004, Level: 9
+Points: 7,004, Level: 9	Points: 7,004, Level: 9	Points: 7,004, Level: 9
+Level up: 46%, 596 Points needed
+Level up: 46%	Level up: 46%	Level up: 46%
+Activity: 4.3%
+Activity: 4.3%	Activity: 4.3%	Activity: 4.3%
+Last Achievements
+Are there any ways to load your kernel driver without kdmapper?Are there any ways to load your kernel driver without kdmapper?
+sign your driver and sc create 
+a1962688586 is offline
+Last Active: Yesterday
+
+Add to a1962688586's Reputation Take from a1962688586's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th May 2026, 07:16 AM	  #3
+GamerDragon971
+1337 H4x0!2
+
+
+GamerDragon971's Avatar
+
+Join Date: Apr 2019
+Posts: 121
+Reputation: 612
+Rep Power: 176
+GamerDragon971 has Private Hacks You Want!GamerDragon971 has Private Hacks You Want!GamerDragon971 has Private Hacks You Want!GamerDragon971 has Private Hacks You Want!GamerDragon971 has Private Hacks You Want!GamerDragon971 has Private Hacks You Want!
+Points: 7,965, Level: 10
+Points: 7,965, Level: 10	Points: 7,965, Level: 10	Points: 7,965, Level: 10
+Level up: 34%, 735 Points needed
+Level up: 34%	Level up: 34%	Level up: 34%
+Activity: 2.7%
+Activity: 2.7%	Activity: 2.7%	Activity: 2.7%
+Last Achievements
+Are there any ways to load your kernel driver without kdmapper?Are there any ways to load your kernel driver without kdmapper?
+dse bypass but walking PsLoadedModuleList would still get you tapped afaik
+another good (but expensive) option is purchasing your own legitimate certificate and using it to sign ur driver.
+
+if you want a decent (and free) alternative i suggest spending some time finding a legitimate signed kernel driver that has r/w memory access, reverse engineer it, and build your own manual mapper around it. it is a better choice than kdmapper but if you don't do it right there will be some detection vectors left. depending on the type of mapper you build your driver code may or may not be backed by a legitimate kernel module (and if it isnt thats a huge detection vector).
+
+if i recall correctly, theres basically 2 main types of driver mappers: you can find a driver with a big enough .rdata / .data (or even .text but thats not great) section and map your target driver in there, or do what kdmapper does (and what i mentioned above) which is to find a driver with r/w, allocate phys memory and call your driver's driver entry.
+
+both of these require a legitimate kernel driver, and depending on the path you choose it will require you to find one with r/w privileges. remember both of these options come with pros and cons.
+
+truth is you can't be 100% undetected these days. the main idea is reducing as many detection vectors as possible. hope i was of some help 
+__________________
+yes i hate my uc name
+Last edited by GamerDragon971; 12th May 2026 at 07:18 AM.
+GamerDragon971 is offline
+Last Active: 12th June 2026
+
+Add to GamerDragon971's Reputation Take from GamerDragon971's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th May 2026, 08:46 AM	  #4
+papasuffix
+Junior Downloads Moderator
+
+papasuffix's Avatar
+
+Join Date: Aug 2024
+Location: Australia
+Posts: 181
+Reputation: 4430
+Rep Power: 49
+papasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating community
+Recognitions
+This certification is awarded to forum staff members that are educated in the fields of reverse engineering and file analysis. All forum staff members with this certification have successfully gone through the process of becoming certified, which includes an individual assessment by upper staff, and the requirement of passing an internal file analysis examination. Anyone with a File Analysis certification is trusted by upper staff to be able to safely and competently approve files within UnKnoWnCheaTs, and only forum staff members that are certified file analyzers have permission to approve files within the UnKnoWnCheaTs downloads section. File Analyzer
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (1)
+Points: 6,812, Level: 9
+Points: 6,812, Level: 9	Points: 6,812, Level: 9	Points: 6,812, Level: 9
+Level up: 29%, 788 Points needed
+Level up: 29%	Level up: 29%	Level up: 29%
+Activity: 66.7%
+Activity: 66.7%	Activity: 66.7%	Activity: 66.7%
+Last Achievements
+Are there any ways to load your kernel driver without kdmapper?
+Quote:
+Originally Posted by Seari7 View Post
+Hello everyone, I would like to ask about how to load my driver into the system to bypass anti-cheats. I know that there is kdmapper, but is it worth writing my own driver similar to kdmapper, or should I just try to rewrite the existing kdmapper?
+The only ways to load your driver is by mapping it manually or going through the legitimate launch path whether that be with a dse bypass or valid signature. Kdmapper is not the only option for mapping your driver, you could make your own or look at other public releases. You just need to get some memory, write your driver to it, make it executable (if it isn't already) and execute it. There are many ways to get memory for your driver but the most likely you're going to allocate it with ExAllocatePool, MmAllocateIndependentPages, MmAllocateContiguousMemory, etc.. There are also a few choices for executing it too like overwriting a syscall like NtAddAtom (kdmapper method), hijacking ioctls, a dataptr hook, etc. the last 2 "execution" methods are usually called communication methods but you could use them to execute your entry point if you wanted to. Some people don't even have entry points because they use a static stub rather than an entire driver, and for something like that the data ptr hook becomes a permanent solution. But most people using a data ptr hook using another execution method to execute their driver ep and then setup the dataptr hook in their ep for their communication
+Last edited by papasuffix; 12th May 2026 at 08:53 AM.
+papasuffix is online now
+Last Active: Today
+
+Add to papasuffix's Reputation Take from papasuffix's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+Options
+Quote message in reply?
+ 
+
+
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Source] p2cmapper - A kernel mapper based on kdmapper to load drivers for your P2C	wockstarlol	General Programming and Reversing	3	26th January 2025 06:33 PM
+[Help] I'd like to load the spoofer driver, but with kdmapper it's bsod. Is there an alterna	AxYbest	Fortnite	17	9th February 2024 03:21 PM
+[Help] Hello, are there any ways to bypass hwid ban without losing all my files in windows?	Hoshnogo123	Valorant	17	23rd July 2021 09:02 AM
+[Release] kdmapper - manual map your driver using a vulnerable driver by Intel	z175	Anti-Cheat Bypass	364	16th August 2020 10:41 PM
+[Tutorial] Tutorial for kdmapper - manual map your driver using a vulnerable driver by Intel	OLD_Anonymous	Anti-Cheat Bypass	54	15th May 2020 08:38 AM
+
+Currently Active Users Viewing This Thread: 1 (1 members and 0 guests)
+Yohanchito
+
+Tags
+kdmapper, driver, load, similar, writing, worth, rewrite, [help], bypass, kernel
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Anti-Cheat Bypass
+
+Log Out Yohanchito
+
+All times are GMT. The time now is 01:41 AM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - Contact - View Staff
+Terms of Use - Privacy Policy - Forum Rules

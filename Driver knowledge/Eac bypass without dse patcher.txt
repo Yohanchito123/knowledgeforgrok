@@ -1,0 +1,473 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+Anti-Cheat Software & Programming
+Anti-Cheat Bypass
+Reload this Page [Help] EAC bypass without dse patcher
+advertisements
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 15
+Threads Started: 5
+Reputation: 164
+Last Login: Yesterday at 02:46 PM
+Your Notifications: 1 
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+EAC bypass without dse patcher
+Old 25th August 2025, 12:41 AM	  #1
+AceRose023
+Posting Well
+
+
+AceRose023's Avatar
+
+Join Date: Jun 2024
+Posts: 25
+Reputation: 10
+Rep Power: 50
+AceRose023 has made posts that are generally average in quality
+Points: 1,583, Level: 3
+Points: 1,583, Level: 3	Points: 1,583, Level: 3	Points: 1,583, Level: 3
+Level up: 27%, 517 Points needed
+Level up: 27%	Level up: 27%	Level up: 27%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+EAC bypass without dse patcher
+Unhappy EAC bypass without dse patcher
+Since dse patcher is absolutely useless, does anyone know how to bypass eac and use tables online?
+AceRose023 is offline
+Last Active: 16th March 2026
+
+Add to AceRose023's Reputation Take from AceRose023's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 25th August 2025, 01:07 PM	  #2
+shook1
+Malicious Files / Violation - Rule #4d
+
+shook1's Avatar
+
+Join Date: Nov 2022
+Location: Ring 0
+Posts: 1,308
+Reputation: 7900
+Rep Power: 0
+shook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATSshook1 DEFINES UNKNOWNCHEATS
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (1)
+Points: 13,440, Level: 14
+Points: 13,440, Level: 14	Points: 13,440, Level: 14	Points: 13,440, Level: 14
+Level up: 88%, 160 Points needed
+Level up: 88%	Level up: 88%	Level up: 88%
+Activity: 21.6%
+Activity: 21.6%	Activity: 21.6%	Activity: 21.6%
+Last Achievements
+EAC bypass without dse patcherEAC bypass without dse patcherEAC bypass without dse patcher
+are you talking about bypassing EAC in order to use cheat engine? the more specifics that you provide in your post, the better support we can offer you....there are plenty of answers and LOTS of good knowledge posted on this forum page alone, and out there in every section on this site...not that many psychic abilities that I have seen though, so even though I try and read your mind I have not quite perfected it
+shook1 is offline
+Last Active: 3rd June 2026
+
+Add to shook1's Reputation Take from shook1's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 25th August 2025, 04:52 PM	  #3
+elchepas
+n00bie
+
+
+elchepas's Avatar
+
+Join Date: Jul 2022
+Location: Washintong DC
+Posts: 8
+Reputation: 6
+Rep Power: 0
+elchepas has a near-average in quality posting ability
+Points: 2,353, Level: 4
+Points: 2,353, Level: 4	Points: 2,353, Level: 4	Points: 2,353, Level: 4
+Level up: 37%, 447 Points needed
+Level up: 37%	Level up: 37%	Level up: 37%
+Activity: 2.6%
+Activity: 2.6%	Activity: 2.6%	Activity: 2.6%
+Last Achievements
+EAC bypass without dse patcherEAC bypass without dse patcher
+Quote:
+Originally Posted by shook1 View Post
+are you talking about bypassing EAC in order to use cheat engine? the more specifics that you provide in your post, the better support we can offer you....there are plenty of answers and LOTS of good knowledge posted on this forum page alone, and out there in every section on this site...not that many psychic abilities that I have seen though, so even though I try and read your mind I have not quite perfected it
+I'm sure he does mean this. If so, how would you do it?
+elchepas is offline
+Last Active: 28th February 2026
+
+Add to elchepas's Reputation Take from elchepas's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 25th August 2025, 06:39 PM	  #4
+nate0x2
+1337 H4x0!2
+
+
+nate0x2's Avatar
+
+Join Date: Sep 2023
+Location: mov [rsp+rax+20],rcx
+Posts: 128
+Reputation: 6254
+Rep Power: 74
+nate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATSnate0x2 DEFINES UNKNOWNCHEATS
+Points: 11,648, Level: 13
+Points: 11,648, Level: 13	Points: 11,648, Level: 13	Points: 11,648, Level: 13
+Level up: 50%, 652 Points needed
+Level up: 50%	Level up: 50%	Level up: 50%
+Activity: 12.5%
+Activity: 12.5%	Activity: 12.5%	Activity: 12.5%
+Last Achievements
+EAC bypass without dse patcherEAC bypass without dse patcher
+Quote:
+Originally Posted by elchepas View Post
+I'm sure he does mean this. If so, how would you do it?
+A driver, i have seen examples of using efiguard and cheat engine to RWM on valorent, not really sure how dse patcher is “useless” though.
+__________________
+Pygg | game hacking library  https://www.unknowncheats.me/forum/a...g-library.html
+Oxide Engine | Modern Cheat engine: https://www.unknowncheats.me/forum/a...at-engine.html
+
+
+
+nate0x2 is offline
+Last Active: 30th October 2025
+
+Add to nate0x2's Reputation Take from nate0x2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 25th August 2025, 07:56 PM	  #5
+skaf2
+Duplicate Account / Violation - Rule #20
+
+skaf2's Avatar
+
+Join Date: Aug 2025
+Posts: 3
+Reputation: 10
+Rep Power: 0
+skaf2 has made posts that are generally average in quality
+Points: 25, Level: 1
+Points: 25, Level: 1	Points: 25, Level: 1	Points: 25, Level: 1
+Level up: 7%, 375 Points needed
+Level up: 7%	Level up: 7%	Level up: 7%
+Activity: 5.1%
+Activity: 5.1%	Activity: 5.1%	Activity: 5.1%
+I used KDU tool and works very well
+
+Problem is EAC somehow detects DSE as deactivated even if it's re-enabled and everything in system shows that is on. I have no idea how it knows that. There is no trace in event log and powershell shows it's all good to go.
+
+I did some research and it's some paragraph 22 situation. You can disable DSE and load what you want but then you can't enable it without reset.
+skaf2 is offline
+Last Active: 13th February 2026
+
+Add to skaf2's Reputation Take from skaf2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 25th August 2025, 08:44 PM	  #6
+AceRose023
+Posting Well
+
+
+AceRose023's Avatar
+
+Threadstarter
+Join Date: Jun 2024
+Posts: 25
+Reputation: 10
+Rep Power: 50
+AceRose023 has made posts that are generally average in quality
+Points: 1,583, Level: 3
+Points: 1,583, Level: 3	Points: 1,583, Level: 3	Points: 1,583, Level: 3
+Level up: 27%, 517 Points needed
+Level up: 27%	Level up: 27%	Level up: 27%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+EAC bypass without dse patcher
+Quote:
+Originally Posted by shook1 View Post
+are you talking about bypassing EAC in order to use cheat engine? the more specifics that you provide in your post, the better support we can offer you....there are plenty of answers and LOTS of good knowledge posted on this forum page alone, and out there in every section on this site...not that many psychic abilities that I have seen though, so even though I try and read your mind I have not quite perfected it
+Yes that is what im talking about, I can't use cheat engine in online lobbies on mcc and dse patcher is a useless piece of software. I need assistance with getting CE to work online (I have an undetected CE)
+
+Quote:
+Originally Posted by nate0x2 View Post
+A driver, i have seen examples of using efiguard and cheat engine to RWM on valorent, not really sure how dse patcher is “useless” though.
+I'm on windows 10, whenever i use dse patcher, i can't use CE online in mcc. There's no updated version of dse patcher and I can't find an alternative to dse patcher. Based off my experience with dse patcher, it's useless
+AceRose023 is offline
+Last Active: 16th March 2026
+
+Add to AceRose023's Reputation Take from AceRose023's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 26th August 2025, 03:51 PM	  #7
+Sternht
+Supreme G0d
+
+
+Sternht's Avatar
+
+Join Date: May 2023
+Location: Moon
+Posts: 402
+Reputation: 12179
+Rep Power: 91
+Sternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server spaceSternht 's rep takes up 1 gig of server space
+Points: 15,935, Level: 16
+Points: 15,935, Level: 16	Points: 15,935, Level: 16	Points: 15,935, Level: 16
+Level up: 67%, 465 Points needed
+Level up: 67%	Level up: 67%	Level up: 67%
+Activity: 4.4%
+Activity: 4.4%	Activity: 4.4%	Activity: 4.4%
+Last Achievements
+EAC bypass without dse patcherEAC bypass without dse patcherEAC bypass without dse patcher
+Quote:
+Originally Posted by skaf2 View Post
+Problem is EAC somehow detects DSE as deactivated even if it's re-enabled and everything in system shows that is on. I have no idea how it knows that. There is no trace in event log and powershell shows it's all good to go.
+sign your driver with any cert (test cert works)
+Sternht is offline
+Last Active: Yesterday
+
+Add to Sternht's Reputation Take from Sternht's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 27th August 2025, 01:07 AM	  #8
+AceRose023
+Posting Well
+
+
+AceRose023's Avatar
+
+Threadstarter
+Join Date: Jun 2024
+Posts: 25
+Reputation: 10
+Rep Power: 50
+AceRose023 has made posts that are generally average in quality
+Points: 1,583, Level: 3
+Points: 1,583, Level: 3	Points: 1,583, Level: 3	Points: 1,583, Level: 3
+Level up: 27%, 517 Points needed
+Level up: 27%	Level up: 27%	Level up: 27%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+EAC bypass without dse patcher
+So it turns out that dse patcher actually does work, i just can't use use my undetected cheat engine on mcc online
+AceRose023 is offline
+Last Active: 16th March 2026
+
+Add to AceRose023's Reputation Take from AceRose023's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 27th August 2025, 10:05 AM	  #9
+papasuffix
+Junior Downloads Moderator
+
+papasuffix's Avatar
+
+Join Date: Aug 2024
+Location: Australia
+Posts: 181
+Reputation: 4430
+Rep Power: 49
+papasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating communitypapasuffix is a legend in the cheating community
+Recognitions
+This certification is awarded to forum staff members that are educated in the fields of reverse engineering and file analysis. All forum staff members with this certification have successfully gone through the process of becoming certified, which includes an individual assessment by upper staff, and the requirement of passing an internal file analysis examination. Anyone with a File Analysis certification is trusted by upper staff to be able to safely and competently approve files within UnKnoWnCheaTs, and only forum staff members that are certified file analyzers have permission to approve files within the UnKnoWnCheaTs downloads section. File Analyzer
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (1)
+Points: 6,812, Level: 9
+Points: 6,812, Level: 9	Points: 6,812, Level: 9	Points: 6,812, Level: 9
+Level up: 29%, 788 Points needed
+Level up: 29%	Level up: 29%	Level up: 29%
+Activity: 66.7%
+Activity: 66.7%	Activity: 66.7%	Activity: 66.7%
+Last Achievements
+EAC bypass without dse patcher
+Quote:
+Originally Posted by AceRose023 View Post
+So it turns out that dse patcher actually does work, i just can't use use my undetected cheat engine on mcc online
+Make sure your cheat engine is actually using a driver.
+	This image has been resized. Click this bar to view the full image. The original image is sized 853x705.
+
+	This image has been resized. Click this bar to view the full image. The original image is sized 853x705.
+
+papasuffix is online now
+Last Active: Today
+
+Add to papasuffix's Reputation Take from papasuffix's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 27th February 2026, 11:16 PM	  #10
+AceRose023
+Posting Well
+
+
+AceRose023's Avatar
+
+Threadstarter
+Join Date: Jun 2024
+Posts: 25
+Reputation: 10
+Rep Power: 50
+AceRose023 has made posts that are generally average in quality
+Points: 1,583, Level: 3
+Points: 1,583, Level: 3	Points: 1,583, Level: 3	Points: 1,583, Level: 3
+Level up: 27%, 517 Points needed
+Level up: 27%	Level up: 27%	Level up: 27%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+EAC bypass without dse patcher
+Quote:
+Originally Posted by papasuffix View Post
+Make sure your cheat engine is actually using a driver.
+https://i.imgur.com/jGC2HfH.png
+https://i.imgur.com/Li9vrYL.png
+I have those settings enabled but still nothing works
+
+also i just remembered that this thread existed
+AceRose023 is offline
+Last Active: 16th March 2026
+
+Add to AceRose023's Reputation Take from AceRose023's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 2nd March 2026, 01:32 AM	  #11
+Cypher332
+Member
+
+
+Cypher332's Avatar
+
+Join Date: Aug 2021
+Posts: 67
+Reputation: -36
+Rep Power: 0
+Cypher332 is becoming a waste of our time
+Points: 4,507, Level: 7
+Points: 4,507, Level: 7	Points: 4,507, Level: 7	Points: 4,507, Level: 7
+Level up: 1%, 893 Points needed
+Level up: 1%	Level up: 1%	Level up: 1%
+Activity: 11.4%
+Activity: 11.4%	Activity: 11.4%	Activity: 11.4%
+Last Achievements
+EAC bypass without dse patcherEAC bypass without dse patcher
+Quote:
+Originally Posted by AceRose023 View Post
+Since dse patcher is absolutely useless, does anyone know how to bypass eac and use tables online?
+
+Add it to your driver and convert it to external (driver->read etc.)
+
+#define OFFSET_DSE_PATCHER 0x391B0 win10 ltsc 21h2
+
+Code:
+uint64_t ntoskrnl = nullptr
+ntoskrnl= driver->GetModuleBase("ntoskrnl.exe");
+uint64_t CIDll = nullptr
+CIDll= driver->GetModuleBase("CI.dll");
+ 
+    uint32_t Address = *(uint64_t*)(CIDll  + OFFSET_DSE_PATCHER); 
+ 
+ 
+     uint32_t Value= 0x0;     0x0 disable 0x6 enable 4 bytes (carefully)
+ 
+    *(uint64_t *)Address = Value;
+Last edited by Cypher332; 2nd March 2026 at 01:50 AM.
+Cypher332 is online now
+Last Active: Yesterday
+
+Add to Cypher332's Reputation Take from Cypher332's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 2nd March 2026, 02:09 AM	  #12
+DJPhatPhuck
+Senior Member
+
+
+DJPhatPhuck's Avatar
+
+Join Date: Jun 2025
+Posts: 89
+Reputation: 284
+Rep Power: 24
+DJPhatPhuck has just realized Linux > WindowsDJPhatPhuck has just realized Linux > WindowsDJPhatPhuck has just realized Linux > Windows
+Points: 1,301, Level: 2
+Points: 1,301, Level: 2	Points: 1,301, Level: 2	Points: 1,301, Level: 2
+Level up: 81%, 99 Points needed
+Level up: 81%	Level up: 81%	Level up: 81%
+Activity: 2.1%
+Activity: 2.1%	Activity: 2.1%	Activity: 2.1%
+Last Achievements
+EAC bypass without dse patcher
+Quote:
+Originally Posted by AceRose023 View Post
+I have those settings enabled but still nothing works
+
+also i just remembered that this thread existed
+any luck getting them to run? ive been tryna find a way to use tables in a server i play custom games in
+DJPhatPhuck is offline
+Last Active: 12th June 2026
+
+Add to DJPhatPhuck's Reputation Take from DJPhatPhuck's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 105 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Tutorial] easy method to make Undetected Cheat Engine + Driver + DSE-Patcher | Bypass AC 2023	gg9949	Anti-Cheat Bypass	198	5th March 2026 01:15 PM
+[Release] DSE-Patcher	Hexagonx	Anti-Cheat Bypass	10	24th August 2025 01:57 AM
+[Help] Dse patcher not working correctly	AceRose023	Anti-Cheat Bypass	0	23rd August 2025 09:05 PM
+[Help] Dse patcher not working correctly	AceRose023	Anti-Cheat Bypass	0	21st August 2025 10:45 PM
+[Request] I Need DSE-Patcher for Win11- 24H2	baygatsby	Anti-Cheat Bypass	16	11th June 2025 10:55 PM
+
+Currently Active Users Viewing This Thread: 1 (1 members and 0 guests)
+Yohanchito
+
+Tags
+bypass, [help], eac, dse, patcher
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Anti-Cheat Bypass
+
+Log Out Yohanchito
+
+All times are GMT. The time now is 01:45 AM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - Contact - View Staff
+Terms of Use - Privacy Policy - Forum Rules

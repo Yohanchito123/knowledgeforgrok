@@ -1,0 +1,913 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+Anti-Cheat Software & Programming
+General Programming and Reversing
+Reload this Page [Source] External Discord Overlay Hijack (with ImGui)
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 15
+Threads Started: 5
+Reputation: 164
+Last Login: Yesterday at 09:37 AM
+Your Notifications: 1 
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 1 of 2	1	2	>	
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+External Discord Overlay Hijack (with ImGui)
+Old 22nd January 2025, 10:12 PM	  #1
+NoootNooot
+Junior Member
+
+
+NoootNooot's Avatar
+
+Join Date: Jan 2023
+Location: Germany
+Posts: 51
+Reputation: 2143
+Rep Power: 86
+NoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating community
+Points: 4,951, Level: 7
+Points: 4,951, Level: 7	Points: 4,951, Level: 7	Points: 4,951, Level: 7
+Level up: 51%, 449 Points needed
+Level up: 51%	Level up: 51%	Level up: 51%
+Activity: 11.1%
+Activity: 11.1%	Activity: 11.1%	Activity: 11.1%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+External Discord Overlay Hijack (with ImGui)
+The method is nothing new, but it still works. I added ImGui and made some other improvements so that it's ready to use. Credits to OverlayCord.
+
+So what does this do?
+- Renders an external overlay for any anticheat protected game, by writing to discords framebuffer
+- Simple setup/usage
+- Basic mouse input support
+
+How to use?
+- Enable discords overlay
+- For some games discord needs to run as administrator in order to inject its overlay module
+- The code is pretty simple to use & understand
+
+Example usage:
+Code:
+HWND TargetWindow = FindWindowA("UnrealWindow", 0);
+ 
+int ProcessID = 0;
+GetWindowThreadProcessId(TargetWindow, reinterpret_cast<LPDWORD>(&ProcessID));
+ 
+Rendering::Initialize(TargetWindow, ProcessID);
+ 
+while (true) {
+	Rendering::BeginFrame();
+	Rendering::HandleInput();
+ 
+	//Draw here using ImGui
+ 
+	Rendering::EndFrame(Width, Height);
+	//In most cases, you want to use your screens or games width & height, but you can also make it smaller for better performance, if you know where you render
+}
+Rendering::Cleanup();
+Source:
+Code:
+namespace Rendering {
+    namespace Core {
+        
+        ID3D11Device* Device = nullptr;
+        ID3D11DeviceContext* Context = nullptr;
+        IDXGISwapChain* SwapChain = nullptr;
+        ID3D11RenderTargetView* RenderTargetView = nullptr;
+ 
+        HANDLE DiscordFileMapping = nullptr;
+        void* DiscordMappedAddress = nullptr;
+        UINT FrameCount = 0;
+ 
+        struct DiscordHeader {
+            UINT Magic;
+            UINT FrameCount;
+            UINT NoClue;
+            UINT Width;
+            UINT Height;
+            BYTE Buffer[1]; // BGRA8 format
+        };
+ 
+        void Initialize(HWND hWnd, UINT discordTargetProcessId) {
+            // Set up DirectX 11
+            DXGI_SWAP_CHAIN_DESC sd;
+            ZeroMemory(&sd, sizeof(sd));
+            sd.BufferCount = 2;
+            sd.BufferDesc.Width = 0;
+            sd.BufferDesc.Height = 0;
+            sd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // Don't forget to use the correct colorspace
+            sd.BufferDesc.RefreshRate.Numerator = 60;
+            sd.BufferDesc.RefreshRate.Denominator = 1;
+            sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+            sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            sd.OutputWindow = hWnd;
+            sd.SampleDesc.Count = 1;
+            sd.SampleDesc.Quality = 0;
+            sd.Windowed = TRUE;
+            sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+ 
+            if (FAILED(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &sd, &SwapChain, &Device, nullptr, &Context))) {
+                throw std::runtime_error("Failed to initialize DirectX 11 device and swap chain.");
+            }
+ 
+            ID3D11Texture2D* backBuffer = nullptr;
+            SwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
+            Device->CreateRenderTargetView(backBuffer, nullptr, &RenderTargetView);
+            backBuffer->Release();
+ 
+            ImGui::CreateContext();
+            ImGui_ImplWin32_Init(hWnd);
+            ImGui_ImplDX11_Init(Device, Context);
+            
+            //SetupStyle();
+ 
+            std::string mappedFilename = "DiscordOverlay_Framebuffer_Memory_" + std::to_string(discordTargetProcessId);
+            DiscordFileMapping = OpenFileMappingA(FILE_MAP_ALL_ACCESS, false, mappedFilename.c_str());
+            if (!DiscordFileMapping) {
+                throw std::runtime_error("Failed to connect to Discord's framebuffer.");
+            }
+ 
+            DiscordMappedAddress = MapViewOfFile(DiscordFileMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+            if (!DiscordMappedAddress) {
+                CloseHandle(DiscordFileMapping);
+                throw std::runtime_error("Failed to map Discord's framebuffer.");
+            }
+        }
+ 
+        void Cleanup() {
+            ImGui_ImplDX11_Shutdown();
+            ImGui::DestroyContext();
+ 
+            if (RenderTargetView) { RenderTargetView->Release(); RenderTargetView = nullptr; }
+            if (SwapChain) { SwapChain->Release(); SwapChain = nullptr; }
+            if (Context) { Context->Release(); Context = nullptr; }
+            if (Device) { Device->Release(); Device = nullptr; }
+ 
+            if (DiscordMappedAddress) {
+                UnmapViewOfFile(DiscordMappedAddress);
+                DiscordMappedAddress = nullptr;
+            }
+            if (DiscordFileMapping) {
+                CloseHandle(DiscordFileMapping);
+                DiscordFileMapping = nullptr;
+            }
+        }
+ 
+        void SendToDiscord(UINT width, UINT height) {
+            if (!DiscordMappedAddress)
+                return;
+ 
+            auto* header = static_cast<DiscordHeader*>(DiscordMappedAddress);
+            header->Width = width;
+            header->Height = height;
+ 
+            // Copy rendered frame to Discord buffer
+            ID3D11Device* pDevice;
+            SwapChain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&pDevice));
+ 
+            ID3D11DeviceContext* pContext;
+            pDevice->GetImmediateContext(&pContext);
+ 
+            ID3D11Texture2D* pBackBuffer;
+            SwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
+ 
+            D3D11_TEXTURE2D_DESC desc;
+ 
+            pBackBuffer->GetDesc(&desc);
+            D3D11_TEXTURE2D_DESC txtDesc;
+            pBackBuffer->GetDesc(&txtDesc);
+            txtDesc.Usage = D3D11_USAGE_STAGING;
+            txtDesc.BindFlags = 0;
+            txtDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+ 
+            ID3D11Texture2D* pBackBufferStaging;
+            HRESULT status = pDevice->CreateTexture2D(&txtDesc, nullptr, &pBackBufferStaging);
+            pContext->CopyResource(pBackBufferStaging, pBackBuffer);
+ 
+ 
+            D3D11_MAPPED_SUBRESOURCE mappedResource;
+            status = Context->Map(pBackBufferStaging, 0, D3D11_MAP_READ, 0, &mappedResource);
+ 
+            memcpy(header->Buffer, mappedResource.pData, width * height * 4); // BGRA8
+            header->FrameCount = ++FrameCount;
+ 
+            Context->Unmap(pBackBufferStaging, 0);
+            pBackBufferStaging->Release();
+            pBackBuffer->Release();
+        }
+ 
+        void BeginFrame() {
+            ImGui_ImplDX11_NewFrame();
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();
+ 
+        }
+ 
+        void EndFrame(UINT width, UINT height) {
+            ImGui::Render();
+ 
+            Context->OMSetRenderTargets(1, &RenderTargetView, nullptr);
+            float clearColor[4] = { 0.1f, 0.1f, 0.1f, 0.0f };
+            Context->ClearRenderTargetView(RenderTargetView, clearColor);
+ 
+            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+ 
+            SwapChain->Present(1, 0);
+            SendToDiscord(width, height);
+        }
+ 
+    
+    }
+ 
+    void HandleInput() {
+        ImGuiIO& io = ImGui::GetIO();
+        POINT mousePos;
+        GetCursorPos(&mousePos);
+        io.MousePos = ImVec2(mousePos.x, mousePos.y);
+ 
+        io.MouseDown[0] = (GetKeyState(VK_LBUTTON) & 0x8000) != 0;
+        io.MouseDown[1] = (GetKeyState(VK_RBUTTON) & 0x8000) != 0;
+ 
+    }
+ 
+    void Initialize(HWND hWnd, UINT discordTargetProcessId) {
+        Core::Initialize(hWnd, discordTargetProcessId);
+    }
+ 
+    void Cleanup() {
+        Core::Cleanup();
+    }
+ 
+    void BeginFrame() {
+        Core::BeginFrame();
+    }
+ 
+    void EndFrame(UINT width, UINT height) {
+        Core::EndFrame(width, height);
+    }
+ 
+    void DrawMenu() {
+        ImGui::ShowDemoWindow();
+    }
+ 
+    void DrawOverlay() {
+ 
+    }
+}
+	This image has been resized. Click this bar to view the full image. The original image is sized 1922x1227.
+
+NoootNooot is offline
+Last Active: 9th April 2026
+
+Add to NoootNooot's Reputation Take from NoootNooot's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 23rd January 2025, 05:52 PM	  #2
+WARBYYTE2
+Supreme G0d
+
+
+WARBYYTE2's Avatar
+
+Join Date: Apr 2024
+Location: France
+Posts: 358
+Reputation: 801
+Rep Power: 55
+WARBYYTE2 is the Hackers Canidate For PresidentWARBYYTE2 is the Hackers Canidate For PresidentWARBYYTE2 is the Hackers Canidate For PresidentWARBYYTE2 is the Hackers Canidate For PresidentWARBYYTE2 is the Hackers Canidate For PresidentWARBYYTE2 is the Hackers Canidate For PresidentWARBYYTE2 is the Hackers Canidate For President
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (1)
+Points: 3,461, Level: 5
+Points: 3,461, Level: 5	Points: 3,461, Level: 5	Points: 3,461, Level: 5
+Level up: 83%, 139 Points needed
+Level up: 83%	Level up: 83%	Level up: 83%
+Activity: 6.4%
+Activity: 6.4%	Activity: 6.4%	Activity: 6.4%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)
+The overlay framerate limmited by discord no ?
+WARBYYTE2 is offline
+Last Active: Yesterday
+
+Add to WARBYYTE2's Reputation Take from WARBYYTE2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 23rd January 2025, 06:50 PM	  #3
+trackx
+Junior Member
+
+
+trackx's Avatar
+
+Join Date: Feb 2015
+Posts: 44
+Reputation: 688
+Rep Power: 275
+trackx no longer needs Tutorialstrackx no longer needs Tutorialstrackx no longer needs Tutorialstrackx no longer needs Tutorialstrackx no longer needs Tutorialstrackx no longer needs Tutorials
+Points: 8,711, Level: 11
+Points: 8,711, Level: 11	Points: 8,711, Level: 11	Points: 8,711, Level: 11
+Level up: 1%, 1,089 Points needed
+Level up: 1%	Level up: 1%	Level up: 1%
+Activity: 3.1%
+Activity: 3.1%	Activity: 3.1%	Activity: 3.1%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+great job!
+trackx is offline
+Last Active: 14th April 2026
+
+Add to trackx's Reputation Take from trackx's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 24th January 2025, 01:52 PM	  #4
+NoootNooot
+Junior Member
+
+
+NoootNooot's Avatar
+
+Threadstarter
+Join Date: Jan 2023
+Location: Germany
+Posts: 51
+Reputation: 2143
+Rep Power: 86
+NoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating community
+Points: 4,951, Level: 7
+Points: 4,951, Level: 7	Points: 4,951, Level: 7	Points: 4,951, Level: 7
+Level up: 51%, 449 Points needed
+Level up: 51%	Level up: 51%	Level up: 51%
+Activity: 11.1%
+Activity: 11.1%	Activity: 11.1%	Activity: 11.1%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by WARBYYTE2 View Post
+The overlay framerate limmited by discord no ?
+Theoretically, yes, but it won't be the limiting factor. Copying the buffer is very resource intensive and optimizations can be made, but I had no issues testing this with a basic esp + menu.
+As long as you do some basic caching and don't do all of your memory reading and entity looping operations in the render thread, you will be fine.
+Last edited by NoootNooot; 24th January 2025 at 01:54 PM.
+NoootNooot is offline
+Last Active: 9th April 2026
+
+Add to NoootNooot's Reputation Take from NoootNooot's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 24th January 2025, 02:08 PM	  #5
+RivenBot7
+Member
+
+
+RivenBot7's Avatar
+
+Join Date: Aug 2017
+Location: aim_ag_texture2
+Posts: 74
+Reputation: 576
+Rep Power: 215
+RivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wall
+Points: 7,332, Level: 9
+Points: 7,332, Level: 9	Points: 7,332, Level: 9	Points: 7,332, Level: 9
+Level up: 76%, 268 Points needed
+Level up: 76%	Level up: 76%	Level up: 76%
+Activity: 2.2%
+Activity: 2.2%	Activity: 2.2%	Activity: 2.2%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by NoootNooot View Post
+Theoretically, yes, but it won't be the limiting factor. Copying the buffer is very resource intensive and optimizations can be made, but I had no issues testing this with a basic esp + menu.
+As long as you do some basic caching and don't do all of your memory reading and entity looping operations in the render thread, you will be fine.
+I'm pretty sure he meant overlay having 60(or whatever is it, if any) fps lock. So it would look choppy on game that runs in higher framerate.
+RivenBot7 is offline
+Last Active: Today
+
+Add to RivenBot7's Reputation Take from RivenBot7's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 24th January 2025, 02:12 PM	  #6
+TwilightWolf
+Supreme H4x0|2
+
+
+TwilightWolf's Avatar
+
+Join Date: Aug 2016
+Location: Omsk, Russia
+Posts: 654
+Reputation: 18406
+Rep Power: 265
+TwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UC
+Points: 31,362, Level: 26
+Points: 31,362, Level: 26	Points: 31,362, Level: 26	Points: 31,362, Level: 26
+Level up: 51%, 838 Points needed
+Level up: 51%	Level up: 51%	Level up: 51%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by RivenBot7 View Post
+I'm pretty sure he meant overlay having 60(or whatever is it, if any) fps lock. So it would look choppy on game that runs in higher framerate.
+Discord hooks in-game present so it runs in a game thread, they can't lock overlay fps
+TwilightWolf is offline
+Last Active: 10th June 2026
+
+Add to TwilightWolf's Reputation Take from TwilightWolf's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 24th January 2025, 02:19 PM	  #7
+RivenBot7
+Member
+
+
+RivenBot7's Avatar
+
+Join Date: Aug 2017
+Location: aim_ag_texture2
+Posts: 74
+Reputation: 576
+Rep Power: 215
+RivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wallRivenBot7 Just put a down payment on his fire-wall
+Points: 7,332, Level: 9
+Points: 7,332, Level: 9	Points: 7,332, Level: 9	Points: 7,332, Level: 9
+Level up: 76%, 268 Points needed
+Level up: 76%	Level up: 76%	Level up: 76%
+Activity: 2.2%
+Activity: 2.2%	Activity: 2.2%	Activity: 2.2%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by TwilightWolf View Post
+Discord hooks in-game present so it runs in a game thread, they can't lock overlay fps
+Yeah mb, I had a similar issue with old nvidia overlay so I just wanted to note it.
+
+Anyways, does It always work internally? I'm pretty sure it's external(some sort of a window?) in Fortnite. Never checked by RE in any means, but that's what I noticed while playing legit.
+RivenBot7 is offline
+Last Active: Today
+
+Add to RivenBot7's Reputation Take from RivenBot7's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 24th January 2025, 06:29 PM	  #8
+TwilightWolf
+Supreme H4x0|2
+
+
+TwilightWolf's Avatar
+
+Join Date: Aug 2016
+Location: Omsk, Russia
+Posts: 654
+Reputation: 18406
+Rep Power: 265
+TwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UCTwilightWolf Will always be a legend at UC
+Points: 31,362, Level: 26
+Points: 31,362, Level: 26	Points: 31,362, Level: 26	Points: 31,362, Level: 26
+Level up: 51%, 838 Points needed
+Level up: 51%	Level up: 51%	Level up: 51%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by RivenBot7 View Post
+Yeah mb, I had a similar issue with old nvidia overlay so I just wanted to note it.
+
+Anyways, does It always work internally? I'm pretty sure it's external(some sort of a window?) in Fortnite. Never checked by RE in any means, but that's what I noticed while playing legit.
+Never seen external Discord overlay. They always inject into the game (at least that's what I've seen)
+TwilightWolf is offline
+Last Active: 10th June 2026
+
+Add to TwilightWolf's Reputation Take from TwilightWolf's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 26th January 2025, 09:01 PM	  #9
+skyfall01
+n00bie
+
+
+skyfall01's Avatar
+
+Join Date: Oct 2024
+Posts: 22
+Reputation: 11
+Rep Power: 40
+skyfall01 has made posts that are generally average in quality
+Points: 1,219, Level: 2
+Points: 1,219, Level: 2	Points: 1,219, Level: 2	Points: 1,219, Level: 2
+Level up: 64%, 181 Points needed
+Level up: 64%	Level up: 64%	Level up: 64%
+Activity: 2.7%
+Activity: 2.7%	Activity: 2.7%	Activity: 2.7%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)
+can you share as a project
+skyfall01 is offline
+Last Active: 10th June 2026
+
+Add to skyfall01's Reputation Take from skyfall01's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 27th January 2025, 02:37 PM	  #10
+NoootNooot
+Junior Member
+
+
+NoootNooot's Avatar
+
+Threadstarter
+Join Date: Jan 2023
+Location: Germany
+Posts: 51
+Reputation: 2143
+Rep Power: 86
+NoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating communityNoootNooot is a legend in the cheating community
+Points: 4,951, Level: 7
+Points: 4,951, Level: 7	Points: 4,951, Level: 7	Points: 4,951, Level: 7
+Level up: 51%, 449 Points needed
+Level up: 51%	Level up: 51%	Level up: 51%
+Activity: 11.1%
+Activity: 11.1%	Activity: 11.1%	Activity: 11.1%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by skyfall01 View Post
+can you share as a project
+I have uploaded it as a full project, with sourcecode and a compiled file. Waiting for approval
+
+Download
+
+But the source I posted here is also easily compatible with an ImGui Directx11 project.
+NoootNooot is offline
+Last Active: 9th April 2026
+
+Add to NoootNooot's Reputation Take from NoootNooot's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 2nd February 2025, 04:37 PM	  #11
+Snowyy
+Forum Administrator
+
+Snowyy's Avatar
+
+Join Date: Dec 2015
+Posts: 4,569
+Reputation: 105488
+Rep Power: 406
+Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!Snowyy has a huge epeen!
+Recognitions
+This certification is awarded to forum staff members that are educated in the fields of reverse engineering and file analysis. All forum staff members with this certification have successfully gone through the process of becoming certified, which includes an individual assessment by upper staff, and the requirement of passing an internal file analysis examination. Anyone with a File Analysis certification is trusted by upper staff to be able to safely and competently approve files within UnKnoWnCheaTs, and only forum staff members that are certified file analyzers have permission to approve files within the UnKnoWnCheaTs downloads section. File Analyzer
+Points: 193,638, Level: 59
+Points: 193,638, Level: 59	Points: 193,638, Level: 59	Points: 193,638, Level: 59
+Level up: 7%, 300,362 Points needed
+Level up: 7%	Level up: 7%	Level up: 7%
+Activity: 15.6%
+Activity: 15.6%	Activity: 15.6%	Activity: 15.6%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+File Approved
+External Discord Overlay Hijack (with ImGui)
+SHA256: 43c764d0d812fb91ccfb2c5f733911fbeda701fe5eb5222694285e598e9e7eb5 - External Discord Overlay with ImGui.zip
+Interested in how we analyze files? Click here to find out.
+
+
+Download: https://www.unknowncheats.me/forum/d...=file&id=48448
+
+I have removed the binaries, as you'll have to add your own visuals either way.
+Snowyy is online now
+Last Active: Today
+
+Add to Snowyy's Reputation Take from Snowyy's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 10th February 2025, 05:18 AM	  #12
+Mareek
+Obere Riedstraße
+
+Mareek's Avatar
+
+Join Date: Jan 2012
+Location: Germany
+Posts: 911
+Reputation: 15620
+Rep Power: 375
+Mareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UCMareek Will always be a legend at UC
+Points: 39,084, Level: 30
+Points: 39,084, Level: 30	Points: 39,084, Level: 30	Points: 39,084, Level: 30
+Level up: 10%, 2,716 Points needed
+Level up: 10%	Level up: 10%	Level up: 10%
+Activity: 2.3%
+Activity: 2.3%	Activity: 2.3%	Activity: 2.3%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+https://vimeo.com/1054910488/baa3ca668aj
+
+Has anyone encountered the same problem like me and knows how to fix it? The screen is flickering so much.
+__________________
+
+Mareek is online now
+Last Active: Today
+
+Add to Mareek's Reputation Take from Mareek's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th February 2025, 12:02 AM	  #13
+dbadt
+Super H4x0r
+
+
+dbadt's Avatar
+
+Join Date: Oct 2020
+Location: gang
+Posts: 335
+Reputation: 600
+Rep Power: 141
+dbadt has Private Hacks You Want!dbadt has Private Hacks You Want!dbadt has Private Hacks You Want!dbadt has Private Hacks You Want!dbadt has Private Hacks You Want!dbadt has Private Hacks You Want!
+Points: 6,831, Level: 9
+Points: 6,831, Level: 9	Points: 6,831, Level: 9	Points: 6,831, Level: 9
+Level up: 31%, 769 Points needed
+Level up: 31%	Level up: 31%	Level up: 31%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by Mareek View Post
+https://vimeo.com/1054910488/baa3ca668aj
+
+Has anyone encountered the same problem like me and knows how to fix it? The screen is flickering so much.
+
+i got the same issue, window is flickering the whole time
+dbadt is offline
+Last Active: 12th June 2026
+
+Add to dbadt's Reputation Take from dbadt's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th February 2025, 10:53 PM	  #14
+q8core
+n00bie
+
+
+q8core's Avatar
+
+Join Date: Jan 2025
+Posts: 8
+Reputation: 10
+Rep Power: 34
+q8core has made posts that are generally average in quality
+Points: 89, Level: 1
+Points: 89, Level: 1	Points: 89, Level: 1	Points: 89, Level: 1
+Level up: 23%, 311 Points needed
+Level up: 23%	Level up: 23%	Level up: 23%
+Activity: 5.9%
+Activity: 5.9%	Activity: 5.9%	Activity: 5.9%
+Quote:
+Originally Posted by Mareek View Post
+https://vimeo.com/1054910488/baa3ca668aj
+
+Has anyone encountered the same problem like me and knows how to fix it? The screen is flickering so much.
+is the Menu flickering or your Game? I cant open the Video link. If it is the Menu then try these steps one by one.. they might help fix the issue.
+
+1. Ensure ImGui::Render() is called only once per frame
+2. Make sure BeginFrame() and EndFrame() are properly executed
+3. Call ImGui::End() inside DrawMenu() in the end of the Code.
+4. Limit FPS by adding Sleep(10) in the while (!exit) loop at the bottom of the code for more stable rendering
+Last edited by q8core; 13th February 2025 at 11:01 PM.
+q8core is offline
+Last Active: 12th May 2025
+
+Add to q8core's Reputation Take from q8core's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th February 2025, 11:32 PM	  #15
+cryptid
+Hacker Supreme
+
+
+cryptid's Avatar
+
+Join Date: Apr 2020
+Posts: 236
+Reputation: 4412
+Rep Power: 156
+cryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating communitycryptid is a legend in the cheating community
+Points: 9,334, Level: 11
+Points: 9,334, Level: 11	Points: 9,334, Level: 11	Points: 9,334, Level: 11
+Level up: 58%, 466 Points needed
+Level up: 58%	Level up: 58%	Level up: 58%
+Activity: 2.9%
+Activity: 2.9%	Activity: 2.9%	Activity: 2.9%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+To fix BE stopping present take a look here in DiscordHook64
+
+8B 05 ?? ?? ?? ?? 65 48 8B 0C 25 58 00 00 00 48 8B 04 C1 48 83 B8 08
+cryptid is offline
+Last Active: Today
+
+Add to cryptid's Reputation Take from cryptid's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 14th February 2025, 09:03 PM	  #16
+SeasonedHobo
+Member
+
+
+SeasonedHobo's Avatar
+
+Join Date: Dec 2023
+Posts: 61
+Reputation: 466
+Rep Power: 61
+SeasonedHobo is a preacher of ownage - listen and learnSeasonedHobo is a preacher of ownage - listen and learnSeasonedHobo is a preacher of ownage - listen and learnSeasonedHobo is a preacher of ownage - listen and learnSeasonedHobo is a preacher of ownage - listen and learn
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (2)
+Points: 2,730, Level: 4
+Points: 2,730, Level: 4	Points: 2,730, Level: 4	Points: 2,730, Level: 4
+Level up: 90%, 70 Points needed
+Level up: 90%	Level up: 90%	Level up: 90%
+Activity: 2.2%
+Activity: 2.2%	Activity: 2.2%	Activity: 2.2%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)
+Does anyone know if Discord hooks other DX11 functions such as DrawIndexed?
+SeasonedHobo is offline
+Last Active: 11th June 2026
+
+Add to SeasonedHobo's Reputation Take from SeasonedHobo's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 11th March 2025, 11:59 PM	  #17
+ggyy456321a
+n00bie
+
+
+ggyy456321a's Avatar
+
+Join Date: Feb 2015
+Posts: 21
+Reputation: 10
+Rep Power: 276
+ggyy456321a has made posts that are generally average in quality
+Points: 7,407, Level: 9
+Points: 7,407, Level: 9	Points: 7,407, Level: 9	Points: 7,407, Level: 9
+Level up: 83%, 193 Points needed
+Level up: 83%	Level up: 83%	Level up: 83%
+Activity: 5.3%
+Activity: 5.3%	Activity: 5.3%	Activity: 5.3%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+someone test in PUBG? The screen is flickering so much... lol
+ggyy456321a is offline
+Last Active: 26th May 2026
+
+Add to ggyy456321a's Reputation Take from ggyy456321a's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 26th March 2025, 06:42 PM	  #18
+pqd2047
+Junior Member
+
+
+pqd2047's Avatar
+
+Join Date: Mar 2025
+Posts: 36
+Reputation: -21
+Rep Power: 0
+pqd2047 is becoming a waste of our time
+Points: 1,025, Level: 2
+Points: 1,025, Level: 2	Points: 1,025, Level: 2	Points: 1,025, Level: 2
+Level up: 25%, 375 Points needed
+Level up: 25%	Level up: 25%	Level up: 25%
+Activity: 2.2%
+Activity: 2.2%	Activity: 2.2%	Activity: 2.2%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)
+Can anyone tell me if this new discord update caused this overlay to stop working?
+pqd2047 is offline
+Last Active: Yesterday
+
+Add to pqd2047's Reputation Take from pqd2047's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 27th March 2025, 08:29 AM	  #19
+BlkPh0x
+n00bie
+
+
+BlkPh0x's Avatar
+
+Join Date: Apr 2020
+Posts: 4
+Reputation: 139
+Rep Power: 150
+BlkPh0x is in the shadow of all hacking legendsBlkPh0x is in the shadow of all hacking legends
+Points: 3,787, Level: 6
+Points: 3,787, Level: 6	Points: 3,787, Level: 6	Points: 3,787, Level: 6
+Level up: 21%, 713 Points needed
+Level up: 21%	Level up: 21%	Level up: 21%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by pqd2047 View Post
+Can anyone tell me if this new discord update caused this overlay to stop working?
+Sorry my mistake this is external not sure of that is working still or not but internal overlays are now broken.
+
+
+Yes it's broken now, it doesn't seem to be using the dll any more. Im trying to figure out what it's doing but looks to maybe be a desktop overlay and I'm not sure how it starts or what process it's running from. My app used discord first and fall back to steam but have swapped that around till I work out what's going on. Anyone done some digging into this yet?
+Last edited by BlkPh0x; 27th March 2025 at 11:49 AM.
+BlkPh0x is offline
+Last Active: 14th September 2025
+
+Add to BlkPh0x's Reputation Take from BlkPh0x's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 8th April 2025, 06:33 AM	  #20
+PanMarcin
+A God
+
+
+PanMarcin's Avatar
+
+Join Date: May 2022
+Posts: 181
+Reputation: 210
+Rep Power: 101
+PanMarcin has just realized Source Code isnt a magazinePanMarcin has just realized Source Code isnt a magazinePanMarcin has just realized Source Code isnt a magazine
+Points: 4,071, Level: 6
+Points: 4,071, Level: 6	Points: 4,071, Level: 6	Points: 4,071, Level: 6
+Level up: 53%, 429 Points needed
+Level up: 53%	Level up: 53%	Level up: 53%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+External Discord Overlay Hijack (with ImGui)External Discord Overlay Hijack (with ImGui)
+Quote:
+Originally Posted by cryptid View Post
+To fix BE stopping present take a look here in DiscordHook64
+
+8B 05 ?? ?? ?? ?? 65 48 8B 0C 25 58 00 00 00 48 8B 04 C1 48 83 B8 08
+Bad Sign not found
+
+Quote:
+Pattern "8B 05 ?? ?? ?? ?? 65 48 8B 0C 25 58 00 00 00 48 8B 04 C1 48 83 B8 08" was not found.
+PanMarcin is offline
+Last Active: 8th June 2026
+
+Add to PanMarcin's Reputation Take from PanMarcin's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 1 of 2	1	2	>	
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 240 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Source] medal-overlay-hook - Hijack Medal.tv's in-game overlay for rendering onto the screen	Altoid	C and C++	10	27th May 2025 06:36 AM
+[Help] ImGui External Hijack discord overlay	igor1840	C and C++	3	28th March 2025 12:13 PM
+[Release] OverlayCord - hijack Discord overlay from an external process	otiosum	Anti-Cheat Bypass	39	26th August 2023 04:59 PM
+[Help] imgui on nvidia overlay hijack	Rebugz	Anti-Cheat Bypass	6	28th July 2020 07:48 PM
+
+Currently Active Users Viewing This Thread: 6 (2 members and 4 guests)
+Yohanchito, Violenceiskey
+
+Tags
+overlay, simple, external, discords, imgui, discord, basic, mouse, input, writing
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    General Programming and Reversing
+
+Log Out Yohanchito
+
+All times are GMT. The time now is 02:42 PM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - Contact - View Staff
+Terms of Use - Privacy Policy - Forum Rules

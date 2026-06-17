@@ -1,0 +1,218 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+Anti-Cheat Software & Programming
+Anti-Cheat Bypass
+Reload this Page [Information] new interrupt method eac
+advertisements
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 15
+Threads Started: 5
+Reputation: 164
+Last Login: Yesterday at 02:46 PM
+Your Notifications: 1 
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+new interrupt method eac
+Old 11th February 2026, 06:23 PM	  #1
+h2rdPufMeb
+n00bie
+
+
+h2rdPufMeb's Avatar
+
+Join Date: Jan 2026
+Posts: 4
+Reputation: 701
+Rep Power: 10
+h2rdPufMeb helps keeps AC's Hiredh2rdPufMeb helps keeps AC's Hiredh2rdPufMeb helps keeps AC's Hiredh2rdPufMeb helps keeps AC's Hiredh2rdPufMeb helps keeps AC's Hiredh2rdPufMeb helps keeps AC's Hiredh2rdPufMeb helps keeps AC's Hired
+Points: 917, Level: 2
+Points: 917, Level: 2	Points: 917, Level: 2	Points: 917, Level: 2
+Level up: 4%, 483 Points needed
+Level up: 4%	Level up: 4%	Level up: 4%
+Activity: 2.9%
+Activity: 2.9%	Activity: 2.9%	Activity: 2.9%
+Unhappy new interrupt method eac
+I've been analyzing the latest devirtualized and cleaned EAC build following their recent update, and I noticed something new that wasn't in the previous version.
+
+They're implementing a per-CPU DPC fan-out with a context blob for each core.
+Based on what I'm seeing, this could be some form of stack profiling for presumably unbacked execution detection, though I can't say for certain.
+
+This is definitely a new addition compared to the last build I analyzed.
+
+Code:
+__int64 sub_4150B0()
+{
+  ULONG i;
+  ULONG j;
+  ULONG ActiveProcessorCount;
+  int v4;
+  PRKDPC Dpc;
+  _BYTE *P;
+ 
+  ActiveProcessorCount = EAC::DecryptImport(KeQueryActiveProcessorCountEx)(0xFFFFu);
+  v4 = sub_415290();
+  if ( v4 >= 0 )
+  {
+    P = EAC::DecryptImport(ExAllocatePoolWithTag)(NonPagedPool, 768LL * ActiveProcessorCount, 0x62657377u);
+    if ( P )
+    {
+      sub_4168E0(P, 0, 768LL * ActiveProcessorCount);
+      for ( i = 0; i < ActiveProcessorCount; ++i )
+      {
+        _mm_lfence();
+        Dpc = (PRKDPC)&P[768 * i];
+        HIDWORD(Dpc[11].DpcData) = i;
+        LOBYTE(Dpc[11].DpcData) = 0;
+        EAC::DecryptImport(KeInitializeEvent)((PRKEVENT)&Dpc[1], NotificationEvent, 0);
+        EAC::DecryptImport(KeInitializeDpc)(Dpc, DeferredRoutine, Dpc);
+        EAC::DecryptImport(KeSetTargetProcessorDpc)(Dpc, i);
+        EAC::DecryptImport(KeSetImportanceDpc)(Dpc, HighImportance);
+        EAC::DecryptImport(KeInsertQueueDpc)(Dpc, 0, 0);
+      }
+      for ( j = 0; j < ActiveProcessorCount; ++j )
+      {
+        _mm_lfence();
+        EAC::DecryptImport(KeWaitForSingleObject)(&P[768 * j + 64], Executive, 0, 0, 0);
+        if ( P[768 * j + 760] )
+        {
+          _mm_lfence();
+          sub_4149C0(&P[768 * j + 88]);
+        }
+      }
+      EAC::DecryptImport(ExFreePoolWithTag)(P, 0x62657377u);
+      return 0;
+    }
+    else
+    {
+      return 3221225626LL;
+    }
+  }
+  else
+  {
+    _mm_lfence();
+    return (unsigned int)v4;
+  }
+}
+h2rdPufMeb is offline
+Last Active: 1st June 2026
+
+Add to h2rdPufMeb's Reputation Take from h2rdPufMeb's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 11th February 2026, 08:12 PM	  #2
+arkina
+n00bie
+
+
+arkina's Avatar
+
+Join Date: Jan 2026
+Posts: 4
+Reputation: 10
+Rep Power: 11
+arkina has made posts that are generally average in quality
+Points: 169, Level: 1
+Points: 169, Level: 1	Points: 169, Level: 1	Points: 169, Level: 1
+Level up: 43%, 231 Points needed
+Level up: 43%	Level up: 43%	Level up: 43%
+Activity: 2.4%
+Activity: 2.4%	Activity: 2.4%	Activity: 2.4%
+very interesting, thanks for sharing
+arkina is offline
+Last Active: 24th March 2026
+
+Add to arkina's Reputation Take from arkina's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 11th February 2026, 09:42 PM	  #3
+Helzky
+Banned
+
+Helzky's Avatar
+
+Join Date: Jun 2025
+Location: behind 7 proxies
+Posts: 681
+Reputation: 33297
+Rep Power: 0
+Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!Helzky has a huge epeen!
+Points: 42,225, Level: 31
+Points: 42,225, Level: 31	Points: 42,225, Level: 31	Points: 42,225, Level: 31
+Level up: 16%, 2,375 Points needed
+Level up: 16%	Level up: 16%	Level up: 16%
+Activity: 99.3%
+Activity: 99.3%	Activity: 99.3%	Activity: 99.3%
+Last Achievements
+new interrupt method eacnew interrupt method eac
+ Moderator note 
+new interrupt method eacThread moved to Anti-Cheat Bypass.
+Helzky is offline
+Last Active: 22nd May 2026
+
+Add to Helzky's Reputation Take from Helzky's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 124 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Information] EAC's Non-Maskable Interrupt Callback	CR3	Anti-Cheat Bypass	40	15th July 2021 01:31 AM
+[Help] Call-Gate and Interrupt-Gate In x64	xuanze	General Programming and Reversing	0	21st April 2019 03:11 PM
+
+Currently Active Users Viewing This Thread: 1 (1 members and 0 guests)
+Yohanchito
+
+Tags
+eac, build, compared, form, stack, profiling, addition, unbacked, based, execution
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Anti-Cheat Bypass
+
+Log Out Yohanchito
+
+All times are GMT. The time now is 01:47 AM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - Contact - View Staff
+Terms of Use - Privacy Policy - Forum Rules

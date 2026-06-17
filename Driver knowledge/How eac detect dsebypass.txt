@@ -1,0 +1,118 @@
+How EAC Can Detect DSE Bypass
+
+been looking into EasyAntiCheat_EOS.sys for a bit and yeah… the usual idea:
+
+Quote:
+patch ci.dll → load → restore → done
+doesn’t really hold up once you look deeper.
+
+what actually happens
+
+the flow itself is correct:
+
+1. patch g_CiOptions or mess with CiValidateImageHeader
+2. call NtLoadDriver → ends up in MmLoadSystemImage
+
+which automatically:
+
+* adds your driver into PsLoadedModuleList
+* creates a DRIVER_OBJECT (\Driver\Name)
+* uses a service key from registry
+
+3. DriverEntry runs
+4. you restore whatever you patched
+
+on paper this looks clean… but the problem is everything that stays behind.
+
+where it starts breaking
+
+PsLoadedModuleList
+
+EAC walks it, nothing surprising there.
+
+but it’s not just “is it there or not”, they actually look at:
+
+* name presence
+* cert info
+* basic structure sanity
+
+so even a normally loaded driver gets inspected.
+
+SystemModuleInformation
+
+Code:
+NtQuerySystemInformation(SystemModuleInformation, ...)
+same list, different access path.
+
+so if you unlink or mess with one and forget the other → mismatch.
+
+driver object still exists
+
+even if you remove yourself from the module list, you still have:
+
+Code:
+\Driver\YourDriverName
+different structure entirely, different way to find you.
+
+code integrity timing
+
+Code:
+NtQuerySystemInformation(SystemCodeIntegrityInformation)
+this exposes the current CI state.
+
+if your timing isn’t perfect → you get caught.
+
+certificate checks
+
+this part is heavier than most people think:
+
+* they actually parse it
+* check the chain
+* detect self-signed certs
+
+so fake signing isn’t really reliable.
+
+the part most people ignore
+
+restoring doesn’t mean invisible.
+
+even if you:
+
+* restore ci.dll immediately
+* unlink from module list
+* clean registry
+* drop driver object
+
+you’re just reducing visibility, not removing it.
+
+too many structures need to stay consistent.
+
+loading before EAC?
+
+yeah it helps a bit:
+
+* avoids some callbacks during load
+
+but after that you still have:
+
+* module scans
+* object lookups
+* integrity checks
+
+so its not really a bypass, just less exposure.
+
+final note
+
+DSE bypass isn’t just about loading anymore.
+
+once the driver goes through normal kernel paths, it leaves traces in multiple places.
+
+cleaning up helps, but it’s not some guaranteed “gg”.
+
+
+
+I hope this was useful
+
+Everything here is based on what I found while reversing.
+
+Haters arent welcome but feel free to leave any constructive criticism.

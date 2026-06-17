@@ -1,0 +1,848 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+Anti-Cheat Software & Programming
+Anti-Cheat Bypass
+Reload this Page [Source] windows 11 dse bypass, kernel source
+advertisements
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 15
+Threads Started: 5
+Reputation: 164
+Last Login: Yesterday at 02:46 PM
+Your Notifications: 1 
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+windows 11 dse bypass, kernel source
+Old 12th February 2025, 03:46 PM	  #1
+jiggy87
+Hacker Supreme
+
+
+jiggy87's Avatar
+
+Join Date: Nov 2023
+Posts: 230
+Reputation: 7873
+Rep Power: 73
+jiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATS
+Points: 11,220, Level: 13
+Points: 11,220, Level: 13	Points: 11,220, Level: 13	Points: 11,220, Level: 13
+Level up: 17%, 1,080 Points needed
+Level up: 17%	Level up: 17%	Level up: 17%
+Activity: 11.1%
+Activity: 11.1%	Activity: 11.1%	Activity: 11.1%
+Last Achievements
+windows 11 dse bypass, kernel source
+Post windows 11 dse bypass, kernel source
+Sharing as I am learning, maybe someone will find it useful.
+
+I have this in my driver that's getting manually mapped and mostly I have been using it to load CE driver. There are different ways of doing this, especially if you have a vulnerable driver.
+
+security.h, option 1 to disable and 2 to enable.
+Code:
+#pragma once
+ 
+#include "imports.h"
+#include "memory.h"
+ 
+#define in_range(x,a,b)    (x >= a && x <= b) 
+#define get_bits( x )    (in_range((x&(~0x20)),'A','F') ? ((x&(~0x20)) - 'A' + 0xA) : (in_range(x,'0','9') ? x - '0' : 0))
+#define get_byte( x )    (get_bits(x[0]) << 4 | get_bits(x[1]))
+#define to_lower_c(Char) ((Char >= (char*)'A' && Char <= (char*)'Z') ? (Char + 32) : Char)
+ 
+namespace security
+{
+    static UCHAR g_original_header[6] = { 0 };
+    static UCHAR g_original_data[6] = { 0 };
+    static bool  g_saved_originals = false;
+    uintptr_t se_validate_image_header;
+    uintptr_t se_validate_image_data;
+ 
+    auto get_system_information(SYSTEM_INFORMATION_CLASS InformationClass) -> void* {
+        unsigned long size = 32;
+        char buffer[32];
+ 
+        ZwQuerySystemInformation(InformationClass, buffer, size, &size);
+ 
+        void* info = ExAllocatePoolZero(NonPagedPool, size, 'UD');
+ 
+        if (!info)
+            return nullptr;
+ 
+        if (!NT_SUCCESS(ZwQuerySystemInformation(InformationClass, info, size, &size))) {
+            ExFreePool(info);
+            return nullptr;
+        }
+ 
+        return info;
+    }
+ 
+    auto get_kernel_module(const char* name) -> uintptr_t {
+ 
+        const PRTL_PROCESS_MODULES info = (PRTL_PROCESS_MODULES)get_system_information(SystemModuleInformation);
+ 
+        if (!info)
+            return NULL;
+ 
+        for (size_t i = 0; i < info->NumberOfModules; ++i) {
+            const auto& mod = info->Modules[i];
+ 
+            if (strcmp(to_lower_c((char*)mod.FullPathName + mod.OffsetToFileName), name) == 0) {
+                const void* address = mod.ImageBase;
+                ExFreePool(info);
+                return (uintptr_t)address;
+            }
+        }
+ 
+        ExFreePool(info);
+        return NULL;
+    }
+ 
+    uintptr_t find_pattern(uintptr_t module_base, const char* pattern) {
+        auto pattern_ = pattern;
+        uintptr_t first_match = 0;
+ 
+        if (!module_base) {
+            return 0;
+        }
+ 
+        const auto nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module_base + reinterpret_cast<IMAGE_DOS_HEADER*>(module_base)->e_lfanew);
+ 
+        for (uintptr_t current = module_base; current < module_base + nt->OptionalHeader.SizeOfImage; current++) {
+            if (!*pattern_) {
+                return first_match;
+            }
+ 
+            if (*(BYTE*)pattern_ == '\?' || *(BYTE*)current == get_byte(pattern_)) {
+                if (!first_match)
+                    first_match = current;
+ 
+                if (!pattern_[2])
+                    return first_match;
+ 
+                if (*(WORD*)pattern_ == '\?\?' || *(BYTE*)pattern_ != '\?')
+                    pattern_ += 3;
+ 
+                else
+                    pattern_ += 2;
+            }
+            else {
+                pattern_ = pattern;
+                first_match = 0;
+            }
+        }
+ 
+        return 0;
+    }
+ 
+    bool dse(int option) {
+        
+ 
+        if (option == 1)
+        {
+            auto ntoskrnl_base = get_kernel_module("ntoskrnl.exe");
+ 
+            if (!ntoskrnl_base)
+            {
+                DbgPrintEx(0, 0, "Failed to get ntoskrnl.exe module base.\n");
+                return STATUS_FAILED_DRIVER_ENTRY;
+            }
+ 
+            DbgPrintEx(0, 0, "ntoskrnl.exe base at: %p\n", ntoskrnl_base);
+ 
+            se_validate_image_header = find_pattern(ntoskrnl_base,
+                "48 8B C4 48 89 58 ? 57 48 81 EC A0 00 00 00 48 83 60"
+            );
+ 
+            se_validate_image_data = find_pattern(ntoskrnl_base,
+                "48 83 EC 48 48 8B 05 ? ? ? ? 4C 8B D1"
+            );
+ 
+            if (!se_validate_image_header || !se_validate_image_data)
+            {
+                DbgPrintEx(0, 0, "Failed to find one or both function patterns.\n");
+                return STATUS_NOT_FOUND;
+            }
+ 
+            const UINT8 patch[] = { 0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3 };
+ 
+            if (!g_saved_originals)
+            {
+                RtlCopyMemory(g_original_header, (void*)se_validate_image_header, sizeof(patch));
+                RtlCopyMemory(g_original_data, (void*)se_validate_image_data, sizeof(patch));
+                g_saved_originals = true;
+            }
+ 
+            if (!memory::write_to_wp((void*)se_validate_image_header, patch, sizeof(patch)))
+            {
+                DbgPrint("Failed to patch se_validate_image_header\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            if (!memory::write_to_wp((void*)se_validate_image_data, patch, sizeof(patch)))
+            {
+                DbgPrint("Failed to patch se_validate_image_data\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            DbgPrintEx(0, 0, "se_validate_image_header patched at %p\n", (void*)se_validate_image_header);
+            DbgPrintEx(0, 0, "se_validate_image_data patched at %p\n", (void*)se_validate_image_data);
+        }
+        else if (option == 2)
+        {
+            if (!g_saved_originals)
+            {
+                DbgPrintEx(0, 0,
+                    "Cannot restore because original bytes were never saved.\n"
+                );
+                return STATUS_INVALID_PARAMETER;
+            }
+ 
+            if (!memory::write_to_wp(
+                (void*)se_validate_image_header,
+                g_original_header,
+                sizeof(g_original_header)))
+            {
+                DbgPrint("Failed to restore se_validate_image_header\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            if (!memory::write_to_wp(
+                (void*)se_validate_image_data,
+                g_original_data,
+                sizeof(g_original_data)))
+            {
+                DbgPrint("Failed to restore se_validate_image_data\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            DbgPrintEx(0, 0, "se_validate_image_header restored at %p\n", (void*)se_validate_image_header);
+            DbgPrintEx(0, 0, "se_validate_image_data restored at %p\n", (void*)se_validate_image_data);
+        }
+ 
+        return STATUS_SUCCESS;
+    }
+}
+write_to_wp:
+Code:
+bool write_to_wp(void* dst, const void* src, size_t size)
+{
+KIRQL oldIrql = KeRaiseIrqlToDpcLevel();
+ 
+unsigned __int64 cr0 = __readcr0();
+ 
+__writecr0(cr0 & ~(1UL << 16));
+ 
+RtlCopyMemory(dst, src, size);
+ 
+__writecr0(cr0);
+ 
+KeLowerIrql(oldIrql);
+ 
+return true;
+}
+credits to posts in uc and github projects
+jiggy87 is offline
+Last Active: 13th June 2026
+
+Add to jiggy87's Reputation Take from jiggy87's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 12th February 2025, 03:51 PM	  #2
+Pythonian
+Duplicate Account / Violation - Rule #20
+
+Pythonian's Avatar
+
+Join Date: Jan 2025
+Posts: 14
+Reputation: -190
+Rep Power: 0
+Pythonian is nearly a complete Unknown AsshatPythonian is nearly a complete Unknown Asshat
+This is almost entirely scrubbed off GitHub
+However, very good work from those OP’s
+Last edited by Pythonian; 12th February 2025 at 03:53 PM.
+Pythonian is offline
+Last Active: 18th February 2025
+
+Add to Pythonian's Reputation Take from Pythonian's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th February 2025, 03:55 PM	  #3
+jiggy87
+Hacker Supreme
+
+
+jiggy87's Avatar
+
+Threadstarter
+Join Date: Nov 2023
+Posts: 230
+Reputation: 7873
+Rep Power: 73
+jiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATS
+Points: 11,220, Level: 13
+Points: 11,220, Level: 13	Points: 11,220, Level: 13	Points: 11,220, Level: 13
+Level up: 17%, 1,080 Points needed
+Level up: 17%	Level up: 17%	Level up: 17%
+Activity: 11.1%
+Activity: 11.1%	Activity: 11.1%	Activity: 11.1%
+Last Achievements
+windows 11 dse bypass, kernel source
+Quote:
+Originally Posted by Pythonian View Post
+This is almost entirely scrubbed off GitHub
+However, very good work from those OP’s
+https://gprivate.com/6fke8
+
+Why you trolling like a b!tch? Ain't you tired?
+Tryna strike a chord and it's probably A-Minor
+jiggy87 is offline
+Last Active: 13th June 2026
+
+Add to jiggy87's Reputation Take from jiggy87's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th February 2025, 06:50 PM	  #4
+wassim dz
+Senior Member
+
+
+wassim dz's Avatar
+
+Join Date: Mar 2017
+Location: EEPROM
+Posts: 76
+Reputation: -311
+Rep Power: 0
+wassim dz is likely going to get bannedwassim dz is likely going to get bannedwassim dz is likely going to get bannedwassim dz is likely going to get banned
+Points: 6,624, Level: 9
+Points: 6,624, Level: 9	Points: 6,624, Level: 9	Points: 6,624, Level: 9
+Level up: 12%, 976 Points needed
+Level up: 12%	Level up: 12%	Level up: 12%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+windows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel source
+can u explain how the bypass work , is it the same thing as kdmapper exploiting vuln driver?, or?
+__________________
+W4ZM
+wassim dz is offline
+Last Active: 1st June 2026
+
+Add to wassim dz's Reputation Take from wassim dz's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th February 2025, 06:56 PM	  #5
+rqhz
+UnKnoWnCheaTeR
+
+
+rqhz's Avatar
+
+Join Date: Sep 2019
+Location: be central
+Posts: 906
+Reputation: 26620
+Rep Power: 199
+rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!rqhz has reputation that takes up 2GB of server space!
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (1)
+Points: 38,048, Level: 29
+Points: 38,048, Level: 29	Points: 38,048, Level: 29	Points: 38,048, Level: 29
+Level up: 70%, 752 Points needed
+Level up: 70%	Level up: 70%	Level up: 70%
+Activity: 13.3%
+Activity: 13.3%	Activity: 13.3%	Activity: 13.3%
+Last Achievements
+windows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel source
+Quote:
+Originally Posted by jiggy87 View Post
+Sharing as I am learning, maybe someone will find it useful.
+
+I have this in my driver that's getting manually mapped and mostly I have been using it to load CE driver. There are different ways of doing this, especially if you have a vulnerable driver.
+
+security.h, option 1 to disable and 2 to enable.
+Code:
+#pragma once
+ 
+#include "imports.h"
+#include "memory.h"
+ 
+#define in_range(x,a,b)    (x >= a && x <= b) 
+#define get_bits( x )    (in_range((x&(~0x20)),'A','F') ? ((x&(~0x20)) - 'A' + 0xA) : (in_range(x,'0','9') ? x - '0' : 0))
+#define get_byte( x )    (get_bits(x[0]) << 4 | get_bits(x[1]))
+#define to_lower_c(Char) ((Char >= (char*)'A' && Char <= (char*)'Z') ? (Char + 32) : Char)
+ 
+namespace security
+{
+    static UCHAR g_original_header[6] = { 0 };
+    static UCHAR g_original_data[6] = { 0 };
+    static bool  g_saved_originals = false;
+    uintptr_t se_validate_image_header;
+    uintptr_t se_validate_image_data;
+ 
+    auto get_system_information(SYSTEM_INFORMATION_CLASS InformationClass) -> void* {
+        unsigned long size = 32;
+        char buffer[32];
+ 
+        ZwQuerySystemInformation(InformationClass, buffer, size, &size);
+ 
+        void* info = ExAllocatePoolZero(NonPagedPool, size, 'UD');
+ 
+        if (!info)
+            return nullptr;
+ 
+        if (!NT_SUCCESS(ZwQuerySystemInformation(InformationClass, info, size, &size))) {
+            ExFreePool(info);
+            return nullptr;
+        }
+ 
+        return info;
+    }
+ 
+    auto get_kernel_module(const char* name) -> uintptr_t {
+ 
+        const PRTL_PROCESS_MODULES info = (PRTL_PROCESS_MODULES)get_system_information(SystemModuleInformation);
+ 
+        if (!info)
+            return NULL;
+ 
+        for (size_t i = 0; i < info->NumberOfModules; ++i) {
+            const auto& mod = info->Modules[i];
+ 
+            if (strcmp(to_lower_c((char*)mod.FullPathName + mod.OffsetToFileName), name) == 0) {
+                const void* address = mod.ImageBase;
+                ExFreePool(info);
+                return (uintptr_t)address;
+            }
+        }
+ 
+        ExFreePool(info);
+        return NULL;
+    }
+ 
+    uintptr_t find_pattern(uintptr_t module_base, const char* pattern) {
+        auto pattern_ = pattern;
+        uintptr_t first_match = 0;
+ 
+        if (!module_base) {
+            return 0;
+        }
+ 
+        const auto nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module_base + reinterpret_cast<IMAGE_DOS_HEADER*>(module_base)->e_lfanew);
+ 
+        for (uintptr_t current = module_base; current < module_base + nt->OptionalHeader.SizeOfImage; current++) {
+            if (!*pattern_) {
+                return first_match;
+            }
+ 
+            if (*(BYTE*)pattern_ == '\?' || *(BYTE*)current == get_byte(pattern_)) {
+                if (!first_match)
+                    first_match = current;
+ 
+                if (!pattern_[2])
+                    return first_match;
+ 
+                if (*(WORD*)pattern_ == '\?\?' || *(BYTE*)pattern_ != '\?')
+                    pattern_ += 3;
+ 
+                else
+                    pattern_ += 2;
+            }
+            else {
+                pattern_ = pattern;
+                first_match = 0;
+            }
+        }
+ 
+        return 0;
+    }
+ 
+    bool dse(int option) {
+        
+ 
+        if (option == 1)
+        {
+            auto ntoskrnl_base = get_kernel_module("ntoskrnl.exe");
+ 
+            if (!ntoskrnl_base)
+            {
+                DbgPrintEx(0, 0, "Failed to get ntoskrnl.exe module base.\n");
+                return STATUS_FAILED_DRIVER_ENTRY;
+            }
+ 
+            DbgPrintEx(0, 0, "ntoskrnl.exe base at: %p\n", ntoskrnl_base);
+ 
+            se_validate_image_header = find_pattern(ntoskrnl_base,
+                "48 8B C4 48 89 58 ? 57 48 81 EC A0 00 00 00 48 83 60"
+            );
+ 
+            se_validate_image_data = find_pattern(ntoskrnl_base,
+                "48 83 EC 48 48 8B 05 ? ? ? ? 4C 8B D1"
+            );
+ 
+            if (!se_validate_image_header || !se_validate_image_data)
+            {
+                DbgPrintEx(0, 0, "Failed to find one or both function patterns.\n");
+                return STATUS_NOT_FOUND;
+            }
+ 
+            const UINT8 patch[] = { 0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3 };
+ 
+            if (!g_saved_originals)
+            {
+                RtlCopyMemory(g_original_header, (void*)se_validate_image_header, sizeof(patch));
+                RtlCopyMemory(g_original_data, (void*)se_validate_image_data, sizeof(patch));
+                g_saved_originals = true;
+            }
+ 
+            if (!memory::write_to_wp((void*)se_validate_image_header, patch, sizeof(patch)))
+            {
+                DbgPrint("Failed to patch se_validate_image_header\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            if (!memory::write_to_wp((void*)se_validate_image_data, patch, sizeof(patch)))
+            {
+                DbgPrint("Failed to patch se_validate_image_data\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            DbgPrintEx(0, 0, "se_validate_image_header patched at %p\n", (void*)se_validate_image_header);
+            DbgPrintEx(0, 0, "se_validate_image_data patched at %p\n", (void*)se_validate_image_data);
+        }
+        else if (option == 2)
+        {
+            if (!g_saved_originals)
+            {
+                DbgPrintEx(0, 0,
+                    "Cannot restore because original bytes were never saved.\n"
+                );
+                return STATUS_INVALID_PARAMETER;
+            }
+ 
+            if (!memory::write_to_wp(
+                (void*)se_validate_image_header,
+                g_original_header,
+                sizeof(g_original_header)))
+            {
+                DbgPrint("Failed to restore se_validate_image_header\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            if (!memory::write_to_wp(
+                (void*)se_validate_image_data,
+                g_original_data,
+                sizeof(g_original_data)))
+            {
+                DbgPrint("Failed to restore se_validate_image_data\n");
+                return STATUS_ACCESS_VIOLATION;
+            }
+ 
+            DbgPrintEx(0, 0, "se_validate_image_header restored at %p\n", (void*)se_validate_image_header);
+            DbgPrintEx(0, 0, "se_validate_image_data restored at %p\n", (void*)se_validate_image_data);
+        }
+ 
+        return STATUS_SUCCESS;
+    }
+}
+write_to_wp:
+Code:
+bool write_to_wp(void* dst, const void* src, size_t size)
+{
+KIRQL oldIrql = KeRaiseIrqlToDpcLevel();
+ 
+unsigned __int64 cr0 = __readcr0();
+ 
+__writecr0(cr0 & ~(1UL << 16));
+ 
+RtlCopyMemory(dst, src, size);
+ 
+__writecr0(cr0);
+ 
+KeLowerIrql(oldIrql);
+ 
+return true;
+}
+credits to posts in uc and github projects
+This is already almost 2 years old.
+
+Code from my github:
+
+Code:
+auto ntoskrnl = get_kernel_module( "ntoskrnl.exe" );
+	if ( !ntoskrnl )
+		return STATUS_FAILED_DRIVER_ENTRY;
+	auto se_validate_image_header = find_pattern( ntoskrnl, "\x48\x39\x35\xCC\xCC\xCC\xCC\x48\x8B\xF9", "xxx????xxx" );
+	if ( !se_validate_image_header )
+		return STATUS_FAILED_DRIVER_ENTRY;
+	
+	auto se_validate_image_data = find_pattern( ntoskrnl, "\x48\x8B\x05\xCC\xCC\xCC\xCC\x4C\x8B\xD1\x48\x85\xC0", "xxx????xxxxxx" ); 
+	if ( !se_validate_image_data )
+		return STATUS_FAILED_DRIVER_ENTRY;
+ 
+	auto rva = se_validate_image_header + *( int32_t* )( se_validate_image_header + 3 ) + 7;
+	auto rva2 = se_validate_image_data +  *( int32_t* )( se_validate_image_header + 3 ) + 7;
+	if ( !rva && !rva2 ) {
+		DbgPrintEx( 0, 0, "[removed]\n" );
+		return STATUS_FAILED_DRIVER_ENTRY;
+	}
+ 
+	DbgPrintEx( 0, 0, "se_validate_image_header %llX\n", rva ); 
+	DbgPrintEx( 0, 0, "se_validate_image_data %llX\n", rva2 );
+ 
+	auto rop = find_pattern( ntoskrnl, "\xB8\x01\x00\x00\x00\xC3", "xxxxxx" ); 
+	if ( !rop ) {
+		DbgPrintEx( 0, 0, "[removed]\n" );
+		return STATUS_FAILED_DRIVER_ENTRY;
+	}
+ 
+	//Swap
+	*( uintptr_t* )rva = rop;
+	*( uintptr_t* )rva2 = rop;
+ 
+	DbgPrintEx( 0, 0, "Swapped to %llX\n", rop );
+Quote:
+Originally Posted by jiggy87 View Post
+https://gprivate.com/6fke8
+
+Why you trolling like a b!tch? Ain't you tired?
+Tryna strike a chord and it's probably A-Minor
+Only because the pattern doesnt match a github post doesnt mean u copied the idea.
+
+My uc post: Another way of Disabling DSE
+Last edited by rqhz; 12th February 2025 at 06:58 PM.
+rqhz is online now
+Last Active: Yesterday
+
+Add to rqhz's Reputation Take from rqhz's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 12th February 2025, 07:07 PM	  #6
+g0tenleet
+Junior Member
+
+
+g0tenleet's Avatar
+
+Join Date: Aug 2021
+Posts: 48
+Reputation: 164
+Rep Power: 117
+g0tenleet is known to create posts excellent in qualityg0tenleet is known to create posts excellent in quality
+Points: 2,835, Level: 5
+Points: 2,835, Level: 5	Points: 2,835, Level: 5	Points: 2,835, Level: 5
+Level up: 5%, 765 Points needed
+Level up: 5%	Level up: 5%	Level up: 5%
+Activity: 99.0%
+Activity: 99.0%	Activity: 99.0%	Activity: 99.0%
+Last Achievements
+windows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel source
+Quote:
+Originally Posted by wassim dz View Post
+can u explain how the bypass work , is it the same thing as kdmapper exploiting vuln driver?, or?
+You can install and load unsigned drivers, meaning you can make kernel-mode drivers (you can run cheats in kernel to circumvent anti-cheats)
+g0tenleet is offline
+Last Active: 25th May 2026
+
+Add to g0tenleet's Reputation Take from g0tenleet's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th February 2025, 07:07 PM	  #7
+jiggy87
+Hacker Supreme
+
+
+jiggy87's Avatar
+
+Threadstarter
+Join Date: Nov 2023
+Posts: 230
+Reputation: 7873
+Rep Power: 73
+jiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATS
+Points: 11,220, Level: 13
+Points: 11,220, Level: 13	Points: 11,220, Level: 13	Points: 11,220, Level: 13
+Level up: 17%, 1,080 Points needed
+Level up: 17%	Level up: 17%	Level up: 17%
+Activity: 11.1%
+Activity: 11.1%	Activity: 11.1%	Activity: 11.1%
+Last Achievements
+windows 11 dse bypass, kernel source
+Quote:
+Originally Posted by jiggy87 View Post
+...
+
+credits to posts in uc and github projects
+I am not claiming any credits or saying I invented anything, or this way is better.
+
+Is patching 2 functions. I changed it to the start of the function and the memory write. Got it working and posted the version.
+
+If I need to give detailed references, I guess I will give detailed reference. While we are at it, I was looking up VulnerablePatchGuardExploit as well.
+jiggy87 is offline
+Last Active: 13th June 2026
+
+Add to jiggy87's Reputation Take from jiggy87's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th February 2025, 07:24 PM	  #8
+l55legend
+Super H4x0r
+
+
+l55legend's Avatar
+
+Join Date: May 2022
+Posts: 317
+Reputation: 7569
+Rep Power: 110
+l55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATS
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (1)
+Points: 17,595, Level: 17
+Points: 17,595, Level: 17	Points: 17,595, Level: 17	Points: 17,595, Level: 17
+Level up: 86%, 205 Points needed
+Level up: 86%	Level up: 86%	Level up: 86%
+Activity: 2.2%
+Activity: 2.2%	Activity: 2.2%	Activity: 2.2%
+Last Achievements
+windows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel source
+wow u guys are arguing over who changed two asm instruction congrats
+__________________
+
+Probs off a pill or two... 
+
+Apex Squirrel Scripts Aren't Even Hard???
+l55legend is offline
+Last Active: Yesterday
+
+Add to l55legend's Reputation Take from l55legend's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th February 2025, 07:26 PM	  #9
+jiggy87
+Hacker Supreme
+
+
+jiggy87's Avatar
+
+Threadstarter
+Join Date: Nov 2023
+Posts: 230
+Reputation: 7873
+Rep Power: 73
+jiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATSjiggy87 DEFINES UNKNOWNCHEATS
+Points: 11,220, Level: 13
+Points: 11,220, Level: 13	Points: 11,220, Level: 13	Points: 11,220, Level: 13
+Level up: 17%, 1,080 Points needed
+Level up: 17%	Level up: 17%	Level up: 17%
+Activity: 11.1%
+Activity: 11.1%	Activity: 11.1%	Activity: 11.1%
+Last Achievements
+windows 11 dse bypass, kernel source
+Quote:
+Originally Posted by l55legend View Post
+wow u guys are arguing over who changed two asm instruction congrats
+Thank you! God forbid someone posts something updated...
+jiggy87 is offline
+Last Active: 13th June 2026
+
+Add to jiggy87's Reputation Take from jiggy87's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 12th February 2025, 07:43 PM	  #10
+l55legend
+Super H4x0r
+
+
+l55legend's Avatar
+
+Join Date: May 2022
+Posts: 317
+Reputation: 7569
+Rep Power: 110
+l55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATSl55legend DEFINES UNKNOWNCHEATS
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (1)
+Points: 17,595, Level: 17
+Points: 17,595, Level: 17	Points: 17,595, Level: 17	Points: 17,595, Level: 17
+Level up: 86%, 205 Points needed
+Level up: 86%	Level up: 86%	Level up: 86%
+Activity: 2.2%
+Activity: 2.2%	Activity: 2.2%	Activity: 2.2%
+Last Achievements
+windows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel sourcewindows 11 dse bypass, kernel source
+Quote:
+Originally Posted by jiggy87 View Post
+Thank you! God forbid someone posts something updated...
+Surprised u guys did not get infractions from the admins on here, they are very..... special
+__________________
+
+Probs off a pill or two... 
+
+Apex Squirrel Scripts Aren't Even Hard???
+l55legend is offline
+Last Active: Yesterday
+
+Add to l55legend's Reputation Take from l55legend's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 488 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Help] How to bypass DSE in Windows 24H2?	IIIXAKERIII	Anti-Cheat Bypass	10	23rd November 2024 02:26 PM
+
+Currently Active Users Viewing This Thread: 2 (2 members and 0 guests)
+Yohanchito, EZIOQ
+
+Tags
+driver, [source], vulnerable, security.h, option, disable, enable, credits, posts, github
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Anti-Cheat Bypass
+
+Log Out Yohanchito
+
+All times are GMT. The time now is 01:43 AM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - Contact - View Staff
+Terms of Use - Privacy Policy - Forum Rules

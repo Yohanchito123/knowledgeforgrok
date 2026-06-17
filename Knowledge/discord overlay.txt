@@ -1,0 +1,344 @@
+k so i spent way too many hours staring at DiscordHook64.dll in IDA and ghidra and figured i should write some of this down before i forget. this is the dll that gets injected into your game when you have the discord in-game overlay turned on. think of it as the discord answer to GameOverlayRenderer64.dll. lots of parallels to steam, a few things steam doesnt do, and at least one trick i think is novel.
+
+ill go renderer-by-renderer plus ipc plus input plus anti-debug plus the one genuinely interesting bit (self-healing hook field 5). all rvas are off DiscordHook64.dll image base.
+
+0. the injection vector (or: why is this dll in my process)
+
+short version: discord uses SetWindowsHookExW(WH_DEBUG, dummy_debug_proc, ...) from its main exe to globally inject DiscordHook64.dll. the exported "dummy_debug_proc" at +0x339B0 is literally:
+
+Code:
+void dummy_debug_proc(a, b, c) {
+    CallNextHookEx(0, a, b, c);
+}
+thats it. its an injection stub disguised as a debug hook proc. the name is misleading on purpose i think. when the OS loads it into your game, DllMain (+0x338A0) checks for the legacy discord_overlay_sdk_x86/x64 modules (early-out if youre running the older sdk), self-pins via GetModuleHandleExW with GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, and spawns the worker thread.
+
+compare to steam: GameOverlayRenderer64.dll is loaded by the steam client into the game via a different mechanism (CreateRemoteThread/LoadLibrary path historically). discord went with WH_DEBUG instead. both end up with a hook dll resident in the host.
+
+1. install timing - NOT in DllMain
+
+this part surprised me. if youre looking for the dxgi present hook install at DLL_PROCESS_ATTACH youre going to be confused for a while. the install chain is:
+DllMain spawns a thread (+0x33890)
+thread calls FUN_180029400 which creates a libuv loop named "HookEvents"
+the loop opens a named pipe
+Code:
+\\.\pipe\DiscordHook_CommandPipe_<PID>
+and waits for commands
+when the discord client process sends ipc command byte 0xFE, FUN_180025A80 runs
+that calls FUN_180024660 which checks the current process name against blocklists and sets per-renderer gate bytes at DAT_180136210..218
+then FUN_180024E20 schedules a libuv timer at 50ms repeat
+the timer fires FUN_1800256F0 -> FUN_180025730 which walks a 5-entry installer table
+once any install succeeds, the timer re-arms at 3000ms as a keepalive verification tick
+
+the 5-entry installer table is the thing to bookmark:
+
+Code:
+FUN_180025800(&DAT_180136210, FUN_180005CF0);    // D3D9
+FUN_180025800(&DAT_180136212, FUN_18001C0B0);    // DXGI
+FUN_180025800(&DAT_180136214, FUN_180033DC0);    // OpenGL
+FUN_180025800(&DAT_180136216, FUN_18003D5F0);    // Vulkan
+FUN_180025800(&DAT_180136218, FUN_180043660);    // user32 input
+each FUN_180025800 is just
+Code:
+if (gate==1 && done==0) done = installer();
+dispatched through cfg.
+
+per-process blocklists baked into the binary:
+D3D9 disabled in
+Code:
+duckduckgo.desktopbrowser
+DXGI disabled in
+Code:
+starcraft.exe
+and
+Code:
+IDE\devenv.exe
+(yes, visual studio)
+OpenGL/Vulkan unconditional
+Input hook installer probes igo32.dll/igo64.dll (nvidia shadowplay) and skips the GetRawInputData detour if found
+
+the "starcraft.exe disables DXGI hooking" line in code made me laugh. someone at discord owed a postmortem about that.
+
+2. the 40-byte hook entry struct and the hidden field [4]
+
+every renderer subsystem stores its hook state in a 40-byte struct that looks like this:
+
+Code:
+struct discord_hook_entry {     // 0x28 bytes
+    /* +0x00 */ const char *name;        // "IDXGISwapChain::Present" etc
+    /* +0x08 */ void       *hook_fn;     // discord's detour
+    /* +0x10 */ void       *target_fn;   // resolved target in dxgi.dll etc
+    /* +0x18 */ void       *trampoline;  // out-ptr written by MH_CreateHook
+    /* +0x20 */ uint32_t    install_sig; // <-- the interesting one
+    /* +0x24 */ uint32_t    _pad;
+};
+in the static image every entry is pre-filled with the magic bytes
+Code:
+82 E1 11 80 01 00 00 00
+followed by 32 zero bytes. the
+Code:
+0x180111E82
+is just a dummy pointer into a .rdata float pool used as a sentinel until runtime install overwrites it. if you grep for that byte pattern you get every hook table in one shot.
+
+now the fun part - field [4] (install_sig at +0x20). for 95% of hooks it stays zero. its only written by one alternative installer FUN_18001C020, which is used by exactly one hook - the d3d12 one at DAT_18012D090. and the watchdog FUN_18001BFF0 reads it back like this:
+
+Code:
+void FUN_18001bff0(...) {
+    if (DAT_18012d0a0 != NULL && DAT_18012d0b0 == *DAT_18012d0a0)
+        return;                                  // hook still intact
+    FUN_18001c020(&PTR_DAT_18012d090, ...);     // re-hook silently
+}
+Code:
+DAT_18012d0a0
+is base+0x10 (target_fn).
+Code:
+DAT_18012d0b0
+is base+0x20 (install_sig). so the check is literally: "do the first 4 bytes at the target still match the JMP we wrote in?" if not, MH_RemoveHook + MH_CreateHook + MH_EnableHook + MH_ApplyQueued and capture the new sig.
+
+this is self-healing hook code. one hook in the whole dll has it. its written so that if anti-cheat or another overlay unhooks discord's d3d12 detour, discord puts it back without a peep. nothing else in the binary has this watchdog wrapper.
+
+why only d3d12? i think its because d3d12 swap chains are more frequently re-created or wrapped by overlays/anticheats than the other apis, so discord found in the wild that this one was the most likely to get knocked out. i didnt verify this by checking discord client telemetry or anything, its just a guess.
+
+3. DXGI hook (the bulk of modern games)
+
+Installer: FUN_18001C0B0
+Hooks installed eagerly: 5 (Present, ResizeBuffers, Release, Present1, ResizeBuffers1)
+Per-hook state base: 0x18012D0B8
+
+each detour reads its own trampoline by absolute address. example from the Present detour at +0x1C600:
+
+Code:
+18001C6BD  MOV  RAX, qword ptr [0x18012D0D0]   ; 0x18012D0B8 + 0x18 = entry.trampoline
+18001C6C4  MOV  RCX, RBX
+18001C6CC  CALL qword ptr [0x180123838]        ; PTR__guard_dispatch_icall (CFG-wrapped)
+dxgi hook reads its rva offsets from a shared memory section, see ipc section below.
+
+4. D3D9 hook
+
+Installer: FUN_180005CF0 (HookD3D9)
+Eager hooks: 3 (Device9::Present, Device9Ex::PresentEx, SwapChain9::Present) at +0x18012C060/088/0B0
+Lazy hooks (installed on first frame): 2 (Device9::Reset @ vtable slot 16 / +0x80, Device9Ex::ResetEx @ vtable slot 132 / +0x420) at +0x18012C0D8/100
+
+unlike the dxgi path which fuses everything into one big function, d3d9 uses 3 thin shims that all delegate to one fat PresentHandler at FUN_180006E20. that handler reads device vtable[16] and vtable[132] on first call to install Reset/ResetEx hooks.
+
+the RTTI strings literally name the class
+Code:
+discord::hook::{anonymous}::D3D9State
+which is nice for matching to the public overlay docs.
+
+5. OpenGL hook
+
+Installer: FUN_180033DC0
+Hooks: 4 (wglDeleteContext, wglSwapLayerBuffers, wglSwapBuffers, gdi32!SwapBuffers)
+Entry base: 0x18012E0D0
+
+interesting detail - SwapBuffers is from gdi32 not opengl32, and discord inline-patches the gdi32 export, not its own IAT slot. this means every gdi32 SwapBuffers caller in the process gets intercepted, not just discord's. inline detour pattern:
+
+Code:
+*(uint8_t*)target = 0xE9;
+*(int32_t*)(target+1) = (trampoline - target) - 5;
+NV_DX_interop2 lol - the GLState::CheckDevice lazily resolves
+Code:
+wglDXRegisterObjectNV
+, [CODE]wglDXLockObjectsNV[/CODET],
+Code:
+wglDXOpenDeviceNV
+via wglGetProcAddress. so under the hood discord copies the overlay frame from a d3d texture into a gl texture via NV_DX_interop2 to avoid a CPU roundtrip.
+
+6. Vulkan hook
+
+Installer: FUN_18003D5F0
+Hooks: 1. Just vkQueuePresentKHR. Thats it.
+Entry: 0x18012EE48
+
+this is the one that makes me happy because everybody assumes vulkan overlays use the layer mechanism. discord does not. zero VK_LAYER strings in the binary, no manifest json path, no vkGetInstanceProcAddr/vkGetDeviceProcAddr/vkCreateSwapchainKHR references. only one string:
+Code:
+"vkQueuePresentKHR"
+at +0x11CDD0.
+
+the installer is passive - GetModuleHandleExW on vulkan-1.dll, not LoadLibrary. if vulkan-1.dll isnt already loaded, no hook.
+
+Code:
+undefined4 FUN_18003d920(VkQueue q, VkPresentInfoKHR* pi) {
+    FUN_18001e0e0();                              // TLS frame-begin
+    if (DAT_180138010 == 0) {
+        FUN_1800204c0(0,0,0,6,0);                 // API id 6 = Vulkan
+        FUN_180021640(6,0,0xffffffff,0,0);
+        DAT_180138010 = 1;
+    }
+    uVar1 = (*PTR__guard_dispatch_icall_180123838)(q, pi);   // trampoline
+    FUN_18001e690();                              // QPC frame stats
+    FUN_18001e120();                              // TLS frame-end
+    return uVar1;
+}
+for cheats/overlays: defeating discord on vulkan is trivial - either byte-compare vkQueuePresentKHR prologue against vulkan-1.dll on disk and restore, OR call through the trampoline at DllBase+0x12EE60.
+
+7. IPC - libuv pipes + 0x15C shared memory + framebuffer shmem
+
+four named pipes per game process, stood up on the "HookEvents" worker thread:
+
+Code:
+\\.\pipe\DiscordHook_Log_<PID>
+\\.\pipe\DiscordHook_CommandPipe_<PID>
+\\.\pipe\DiscordGameEvents_<PID>
+\\.\pipe\DiscordOverlay_<PID>
+the
+Code:
+\\.\pipe\
+prefix is built inline as the 64-bit constant
+Code:
+0x657069705c2e5c5c
++ a trailing backslash inside the Server ctor FUN_18004BB60. cute.
+
+each pipe is a libuv uv_pipe_s, hardened with explicit DACLs via SetSecurityInfo+SetEntriesInAclW (mask 0xC0000000 = GENERIC_READ|GENERIC_WRITE), and listened with backlog 64. the DACL widens to include S-1-15-2-1 (AppContainer SID) and AU (Authenticated Users), with a Low mandatory label - so the discord client can connect from a lower-IL process if needed.
+
+wire framing is 8-byte binary header:
+
+Code:
+struct ipc_hdr {
+    uint8_t  opcode;
+    uint8_t  pad[3];
+    uint32_t length;
+};
+// followed by `length` payload bytes
+dispatch uses FNV-1a-ish hashing with magic constants
+Code:
+0x4BF29CE484222325
+(offset basis) and
+Code:
+0x100000001B3
+(prime) - those are the FNV-1a 64-bit values. classic unordered_map<uint8_t, ReceiverFn>.
+
+Shared memory side (alongside the pipes for bulk data):
+
+Code:
+DiscordHook_Info_<PID>                       (0x15C bytes - hook config)
+DiscordOverlay_Framebuffer_Memory_<PID>      (RGBA frames)
+DiscordOverlay_Framebuffer_Mutex_<PID>       (double-buffer mutex)
+DiscordVideoHook_Framebuffer_Memory_<PID>
+Global\DiscordVideoHook_Framebuffer_Event_<PID>
+Global\Discord_Soundshare_<PID>
+Discord_AudioRingbuffer_<PID>
+the 0x15C-byte
+Code:
+DiscordHook_Info_<PID>
+section is the hook offsets table. discord's client process picks per-game vtable rvas via its own profile database and writes them into this section before nudging the hook. the layout:
+
+Code:
++0x08  D3D9 valid flag
++0x0C  d3d9.dll expected image size
++0x10  IDirect3DDevice9::Present RVA
++0x14  IDirect3DDevice9Ex::PresentEx RVA
++0x18  IDirect3DSwapChain9::Present RVA
++0x1C  extra (logged not hooked)
++0x20  DXGI valid flag
++0x28..0x38  DXGI Present/Present1/ResizeBuffers/ResizeBuffers1/Release RVAs
++0x148..0x158  d3d12 valid + RVAs
+this is critical - it means discord doesnt hardcode dxgi/d3d9 offsets in the dll. the client process pushes them in. so when dxgi changes between windows builds, discord updates the client not the hook dll. clever.
+
+8. Input intercept - no WndProc subclass, no SetWindowsHookEx
+
+this one is structurally clever. discord does NOT subclass the game's WndProc via SetWindowLongPtrW. SetWindowLongPtrW isnt even imported. SetWindowsHookExW IS imported but only for the WH_DEBUG injection vector above - not used for input filtering.
+
+instead, the installer FUN_180043660 minhooks 17 user32 functions in place:
+
+Code:
+GetKeyboardState                FUN_180043E60
+GetAsyncKeyState                FUN_180043EA0
+GetRawInputData                 FUN_180043EE0  (skipped if igo32/64.dll)
+GetRegisteredRawInputDevices    FUN_180043FB0
+RegisterRawInputDevices         FUN_1800440A0
+GetCursor                       FUN_180044330
+GetCursorPos                    FUN_180044380
+SetCursor                       FUN_1800443F0
+SetCursorPos                    FUN_1800444A0
+ShowCursor                      FUN_180044500
+ClipCursor                      FUN_180044560
+GetClipCursor                   FUN_1800445E0
+GetCursorInfo                   FUN_1800446C0
+GetMessageA / GetMessageW       FUN_180044770 / 810
+PeekMessageA / PeekMessageW     FUN_1800448B0 / 9A0
+the intercept on/off toggle uses RegisterWindowMessageA with a per-thread unique name:
+
+Code:
+"Discord Overlay Intercept Input Message <TID>"
+the returned WM_ id is stored at +0x136304. when the ipc command
+Code:
+intercept_input
+arrives, discord
+Code:
+PostMessageW(captured_hwnd, WM_id, wparam=1, 0)
+. the receiving GetMessage/PeekMessage detour sees that message inside the game's own message pump, flips DAT_180136300 & 1, captures cursor state, calls
+Code:
+ImmAssociateContextEx(hwnd, 0, IACE_IGNORENOCONTEXT)
+to suspend IME, and from then on diverts keyboard/mouse messages into a TLS-backed synthetic MSG queue.
+
+why this is smart: from an anticheat perspective the detection surface is just "some user32 import addresses now point into a JIT-allocated stub from MinHook's trampoline pool". there is no WndProc on the host window pointing into a foreign dll, no SetWindowsHookEx handle to enumerate, no global hook callback running in foreign thread contexts.
+
+steam overlay does WndProc subclassing which is one of the standard fingerprints anticheats look for. discord deliberately avoided it. i think this is partly to reduce false positives against AC and partly because subclassing breaks when other overlays (overwolf/nvidia/steam) also subclass on top.
+
+9. Anti-debug? basically none
+
+i went looking for it specifically. results:
+PEB.BeingDebugged read (gs:[0x60]) - 0 occurrences
+NtGlobalFlag, ProcessDebugPort, ProcessDebugFlags, ProcessDebugObjectHandle - 0
+ThreadHideFromDebugger - 0
+rdtsc timing - 0
+hardware breakpoint reads via GetThreadContext - 0
+self-CRC / integrity checks - 0
+CheckRemoteDebuggerPresent - 0
+
+theres exactly one IsDebuggerPresent call in the binary, at +0xE1C83 inside MSVC's __raise_exception / __report_runtime_error helper. note the logic - it skips the fatal __report_securityfailure when a debugger is attached. its making the path debugger-friendly, not hostile. stock CRT.
+
+CFG and /GS are present but theyre stock MSVC compiler options not custom anti-tamper. the
+Code:
+PTR__guard_dispatch_icall_180123838
+indirection is everywhere.
+
+the one hazard you must know about: FUN_18008FF90 is MinHook's thread-RIP-fixup pass, called from MH_DisableHook. on disable, it:
+enumerates every thread in the process
+OpenThread(0x5A) = THREAD_GET_CONTEXT|SET_CONTEXT|SUSPEND_RESUME|QUERY_INFORMATION
+SuspendThread, GetThreadContext
+walks the HOOK_ENTRY table
+if your thread's RIP is in the trampoline range being torn down, it rewrites RIP using the instruction boundary map and SetThreadContext
+
+this is vanilla MinHook ProcessThreadIPs(). its not intentional anti-cheat behavior - its required for correctness when disabling hooks. BUT if your cheat hooks the same addresses (e.g. you also hook IDXGISwapChain::Present in dxgi.dll) and discord later runs MH_DisableHook on overlay teardown, discord will rewrite your cheat's threads' RIPs. they wont be parked in valid code anymore.
+
+mitigation: hook outside discord's HOOK_ENTRY pool (different target addresses - e.g. wrap discord's hook instead of the underlying api), or make sure your hooked threads arent parked in discord's trampolines when overlay teardown happens.
+
+10. summary table - everything thats hooked
+
+Code:
+Subsystem    | Installer       | Entry base     | Count | Notes
+-------------|-----------------|----------------|-------|------------------------
+D3D9         | FUN_180005CF0   | 0x18012C060    |   3+2 | +2 lazy (Reset/ResetEx)
+D3D12        | FUN_18000F290   | 0x18012D090    |     1 | self-healing watchdog
+DXGI         | FUN_18001C0B0   | 0x18012D0B8    |     5 |
+OpenGL+gdi32 | FUN_180033DC0   | 0x18012E0D0    |     4 | raw inline FUN_18008FA10
+Steam        | FUN_18003CDD0   | 0x18012EE20    |     1 | AddTimelineEvent
+Vulkan       | FUN_18003D5F0   | 0x18012EE48    |     1 | no VK_LAYER
+Spatial Audio| FUN_1800409C0   | 0x18012EE70    |     6 |
+WASAPI       | FUN_180040F20   | 0x18012EF60    |     3 |
+User32 input | FUN_180043660   | 0x18012EFD8    |    15 | mix of installer patterns
+call it ~40 hooks total across 9 subsystems. only one (d3d12) self-heals.
+
+11. things i didnt fully chase
+the d3d12 installer FUN_18000F290 itself - i confirmed its called and confirmed the watchdog wrapper is the only writer of field [4], but i didnt enumerate the actual d3d12 functions being hooked
+which thread runs the watchdog re-check loop. theres a libuv keepalive timer at 3000ms that re-runs the installer registry but i didnt confirm whether the watchdog is invoked from that tick or from a separate timer
+whether minhook's trampoline allocator actually puts the trampoline in the cfg bitmap or some other mechanism - didnt diff
+the spatial audio installer FUN_1800409C0 - i counted 5 in one pass and 6 in another, the entry array goes EE70/EE98/EEC0/EEE8/EF10/EF38
+the FNV-1a opcode handlers full enum - have bytes, dont have full string mapping
+the actual contents of
+Code:
+Global\Discord_Soundshare_<PID>
+ring buffer
+whether the per-process blocklist for dxgi has more entries past starcraft.exe/devenv.exe
+the relationship between the older
+Code:
+discord_overlay_sdk_x86/x64
+DllMain bypass and the current dll
+whether the input event JSON forwarded to the discord client gets used for global keybind / push-to-talk handling vs only overlay interaction
+
+if anyone wants to fill in the d3d12 install detail or finger any of the other gaps, the entry struct sentinel
+Code:
+82 E1 11 80 01 00 00 00
+is the easiest grep to bootstrap your own analysis.

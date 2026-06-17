@@ -1,0 +1,219 @@
+Undetected hooks from kernel
+Old 21st January 2026, 01:18 PM	  #1
+bigslim04
+1337 H4x0!2
+
+
+bigslim04's Avatar
+
+Join Date: Feb 2024
+Posts: 122
+Reputation: 594
+Rep Power: 57
+bigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wall
+Points: 3,391, Level: 5
+Points: 3,391, Level: 5	Points: 3,391, Level: 5	Points: 3,391, Level: 5
+Level up: 74%, 209 Points needed
+Level up: 74%	Level up: 74%	Level up: 74%
+Activity: 8.6%
+Activity: 8.6%	Activity: 8.6%	Activity: 8.6%
+Last Achievements
+Undetected hooks from kernel
+Undetected hooks from kernel
+Hi guys, is it possibile to make undetected hooks from kernel?(invisible to a usermdoe application) withouth hypervisor and EPT hooks, thanks🙏
+bigslim04 is offline
+Last Active: 11th June 2026
+
+Add to bigslim04's Reputation Take from bigslim04's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 21st January 2026, 02:07 PM	  #2
+buttleye
+n00bie
+
+
+buttleye's Avatar
+
+Join Date: Jul 2025
+Posts: 4
+Reputation: 642
+Rep Power: 23
+buttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiend
+Points: 1,113, Level: 2
+Points: 1,113, Level: 2	Points: 1,113, Level: 2	Points: 1,113, Level: 2
+Level up: 43%, 287 Points needed
+Level up: 43%	Level up: 43%	Level up: 43%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+Undetected hooks from kernel
+create shadow page with contents same as original page, apply patches to shadow page, apply nx = 1 to original page, hook kdtrap, swap rip to shadow page
+sry for bad eng
+buttleye is offline
+Last Active: 8th May 2026
+
+Add to buttleye's Reputation Take from buttleye's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 21st January 2026, 06:49 PM	  #3
+bigslim04
+1337 H4x0!2
+
+
+bigslim04's Avatar
+
+Threadstarter
+Join Date: Feb 2024
+Posts: 122
+Reputation: 594
+Rep Power: 57
+bigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wall
+Points: 3,391, Level: 5
+Points: 3,391, Level: 5	Points: 3,391, Level: 5	Points: 3,391, Level: 5
+Level up: 74%, 209 Points needed
+Level up: 74%	Level up: 74%	Level up: 74%
+Activity: 8.6%
+Activity: 8.6%	Activity: 8.6%	Activity: 8.6%
+Last Achievements
+Undetected hooks from kernel
+Exclamation
+Yes, but won't that trigger patch guard?
+bigslim04 is offline
+Last Active: 11th June 2026
+
+Add to bigslim04's Reputation Take from bigslim04's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 21st January 2026, 07:02 PM	  #4
+lad2334
+Supreme G0d
+
+
+lad2334's Avatar
+
+Join Date: May 2025
+Posts: 399
+Reputation: 7995
+Rep Power: 37
+lad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATSlad2334 DEFINES UNKNOWNCHEATS
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (2)
+Points: 12,461, Level: 14
+Points: 12,461, Level: 14	Points: 12,461, Level: 14	Points: 12,461, Level: 14
+Level up: 13%, 1,139 Points needed
+Level up: 13%	Level up: 13%	Level up: 13%
+Activity: 2.2%
+Activity: 2.2%	Activity: 2.2%	Activity: 2.2%
+Last Achievements
+Undetected hooks from kernelUndetected hooks from kernel
+Quote:
+Originally Posted by bigslim04 View Post
+Yes, but won't that trigger patch guard?
+no even eac hooks kdtrap to catch exceptions
+__________________
+i got the devil on my phone he told me keep doing ts
+
+luh crank luh crank luh crank
+
+“You’re the most r... kid I’ve ever knew
+And you just say random [removed] you’re unaware of just to make people agree with you then you come up with absolutely the opposite next day” -rhaym.dev
+lad2334 is offline
+Last Active: 10th June 2026
+
+Add to lad2334's Reputation Take from lad2334's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 23rd January 2026, 08:15 AM	  #5
+bigslim04
+1337 H4x0!2
+
+
+bigslim04's Avatar
+
+Threadstarter
+Join Date: Feb 2024
+Posts: 122
+Reputation: 594
+Rep Power: 57
+bigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wallbigslim04 Just put a down payment on his fire-wall
+Points: 3,391, Level: 5
+Points: 3,391, Level: 5	Points: 3,391, Level: 5	Points: 3,391, Level: 5
+Level up: 74%, 209 Points needed
+Level up: 74%	Level up: 74%	Level up: 74%
+Activity: 8.6%
+Activity: 8.6%	Activity: 8.6%	Activity: 8.6%
+Last Achievements
+Undetected hooks from kernel
+So you can just inline hook it? Or you mean doing like the project "hook guard" on github?
+bigslim04 is offline
+Last Active: 11th June 2026
+
+Add to bigslim04's Reputation Take from bigslim04's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+
+Old 23rd January 2026, 12:06 PM	  #6
+buttleye
+n00bie
+
+
+buttleye's Avatar
+
+Join Date: Jul 2025
+Posts: 4
+Reputation: 642
+Rep Power: 23
+buttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiendbuttleye is the Coding Fiend
+Points: 1,113, Level: 2
+Points: 1,113, Level: 2	Points: 1,113, Level: 2	Points: 1,113, Level: 2
+Level up: 43%, 287 Points needed
+Level up: 43%	Level up: 43%	Level up: 43%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+Undetected hooks from kernel
+just inline hook shadow page, when exception occurs in kdtrap (due to original page not executable) handle it and swap rip to shadow page, this trick cant be detected from usermode, only by checking execution flow
+buttleye is offline
+Last Active: 8th May 2026
+
+Add to buttleye's Reputation Take from buttleye's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 23rd January 2026, 05:18 PM	  #7
+jjjjason
+n00bie
+
+
+jjjjason's Avatar
+
+Join Date: Nov 2025
+Posts: 10
+Reputation: 477
+Rep Power: 14
+jjjjason has just learned Packet Editing Doesnt Involve food toppings anymorejjjjason has just learned Packet Editing Doesnt Involve food toppings anymorejjjjason has just learned Packet Editing Doesnt Involve food toppings anymorejjjjason has just learned Packet Editing Doesnt Involve food toppings anymorejjjjason has just learned Packet Editing Doesnt Involve food toppings anymore
+Points: 480, Level: 1
+Points: 480, Level: 1	Points: 480, Level: 1	Points: 480, Level: 1
+Level up: 16%, 420 Points needed
+Level up: 16%	Level up: 16%	Level up: 16%
+Activity: 2.4%
+Activity: 2.4%	Activity: 2.4%	Activity: 2.4%
+I did this in usermode using VEHs, but I'm wondering, is there a PoC for kernel anywhere? Is it really kdtrap or is it KiPageFault? Thanks
+jjjjason is online now
+Last Active: Yesterday
+
+Add to jjjjason's Reputation Take from jjjjason's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Unread 8th June 2026, 05:40 AM	  #8
+someRandonName7
+n00bie
+
+
+someRandonName7's Avatar
+
+Join Date: Jan 2026
+Posts: 2
+Reputation: 10
+Rep Power: 11
+someRandonName7 has made posts that are generally average in quality
+Points: 301, Level: 1
+Points: 301, Level: 1	Points: 301, Level: 1	Points: 301, Level: 1
+Level up: 76%, 99 Points needed
+Level up: 76%	Level up: 76%	Level up: 76%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+This is not true. You can’t catch nx=1 exception in kdtrap since nx=1 violation won’t reach kdtrap in the first place
